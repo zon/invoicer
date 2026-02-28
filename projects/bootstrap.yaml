@@ -48,6 +48,6 @@ requirements:
       - Weeks are broken into weekly line items
       - A week belongs to a month if its Wednesday falls in that month
       - opencode is prompted to generate an HTML invoice with random styling
-      - HTML invoice is saved to a file
-      - When pdf flag is set, the HTML invoice is converted to a PDF file
-    passing: true
+      - HTML invoice is saved to a file in the working directory
+      - When pdf flag is set, the HTML invoice is converted to a PDF file in the working directory
+    passing: false
