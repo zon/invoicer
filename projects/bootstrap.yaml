@@ -7,7 +7,7 @@ requirements:
     items:
       - README.md documents all args, options, subcommands, and the config file
       - All args, options, and subcommands have help text defined in kong struct tags
-    passing: false
+    passing: true
 
   - category: project
     description: Go module and project structure
