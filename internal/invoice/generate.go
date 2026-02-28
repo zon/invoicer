@@ -10,34 +10,39 @@ import (
 	"time"
 )
 
-// GenerateHTML prompts opencode to generate an HTML invoice and writes it to outputPath.
-// model is the opencode-formatted model stub (e.g. "anthropic/claude-haiku-4-5").
-func GenerateHTML(inv *Invoice, model, outputPath string) error {
-	prompt := buildPrompt(inv, outputPath)
-
+// OpencodeExec is the function used to run the opencode subprocess.
+// It can be overridden in tests to use a fake binary.
+var OpencodeExec = func(model, dir, prompt string) ([]byte, error) {
 	cmd := exec.Command("opencode", "run",
 		"--model", model,
 		"--format", "json",
-		"--dir", filepath.Dir(outputPath),
+		"--dir", dir,
 		prompt,
 	)
 	cmd.Stderr = os.Stderr
+	return cmd.Output()
+}
 
-	out, err := cmd.Output()
+// GenerateHTML prompts opencode to generate an HTML invoice and writes it to outputPath.
+// model is the opencode-formatted model stub (e.g. "anthropic/claude-haiku-4-5").
+func GenerateHTML(inv *Invoice, model, outputPath string) error {
+	prompt := BuildPrompt(inv, outputPath)
+
+	out, err := OpencodeExec(model, filepath.Dir(outputPath), prompt)
 	if err != nil {
 		return fmt.Errorf("running opencode: %w", err)
 	}
 
 	// Parse JSON lines to check for errors or confirm file was written.
-	if err := checkOpencodeOutput(out, outputPath); err != nil {
+	if err := CheckOpencodeOutput(out, outputPath); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// buildPrompt creates the opencode prompt for generating the HTML invoice.
-func buildPrompt(inv *Invoice, outputPath string) string {
+// BuildPrompt creates the opencode prompt for generating the HTML invoice.
+func BuildPrompt(inv *Invoice, outputPath string) string {
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf(
@@ -106,8 +111,8 @@ type writeInput struct {
 	FilePath string `json:"filePath"`
 }
 
-// checkOpencodeOutput parses the JSON lines from opencode and verifies the file was written.
-func checkOpencodeOutput(out []byte, expectedPath string) error {
+// CheckOpencodeOutput parses the JSON lines from opencode and verifies the file was written.
+func CheckOpencodeOutput(out []byte, expectedPath string) error {
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	for _, line := range lines {
 		if line == "" {
