@@ -7,7 +7,7 @@ requirements:
     items:
       - README.md documents all args, options, subcommands, and the config file
       - All args, options, and subcommands have help text defined in kong struct tags
-    passing: false
+    passing: true
 
   - category: project
     description: Go module and project structure
@@ -15,8 +15,8 @@ requirements:
       - Go module initialized as github.com/zon/invoicer
       - Kong is added as a dependency for CLI parsing
       - Main entrypoint exists at cmd/invoicer/main.go
-      - Makefile exists with an install target that builds and installs the binary to $GOPATH/bin
-    passing: false
+      - Makefile exists with an install target that runs go install to install the binary
+    passing: true
 
   - category: cli
     description: CLI arguments and options are defined
@@ -29,7 +29,7 @@ requirements:
       - hours option accepts hours per week worked, required without config
       - pdf flag controls whether HTML is converted to PDF, defaults to false
       - model option accepts an opencode-formatted model stub, defaults to anthropic/claude-haiku-4-5
-    passing: false
+    passing: true
 
   - category: config
     description: Config file support
@@ -39,7 +39,7 @@ requirements:
       - set config subcommand accepts the same options as the main command (vendor, customer, rate, hours, pdf, model)
       - set config writes specified options to ~/.invoicer/config.yaml, creating the file and directory if needed
       - set config only updates the options that are explicitly provided, leaving others unchanged
-    passing: false
+    passing: true
 
   - category: invoice
     description: Invoice generation logic
@@ -48,6 +48,6 @@ requirements:
       - Weeks are broken into weekly line items
       - A week belongs to a month if its Wednesday falls in that month
       - opencode is prompted to generate an HTML invoice with random styling
-      - HTML invoice is saved to a file
-      - When pdf flag is set, the HTML invoice is converted to a PDF file
-    passing: false
+      - HTML invoice is saved to a file in the working directory
+      - When pdf flag is set, the HTML invoice is converted to a PDF file in the working directory
+    passing: true
