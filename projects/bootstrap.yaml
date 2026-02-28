@@ -1,0 +1,53 @@
+name: bootstrap
+description: Bootstrap the invoicer Go CLI app
+
+requirements:
+  - category: docs
+    description: Documentation
+    items:
+      - README.md documents all args, options, subcommands, and the config file
+      - All args, options, and subcommands have help text defined in kong struct tags
+    passing: false
+
+  - category: project
+    description: Go module and project structure
+    items:
+      - Go module initialized as github.com/zon/invoicer
+      - Kong is added as a dependency for CLI parsing
+      - Main entrypoint exists at cmd/invoicer/main.go
+      - Makefile exists with an install target that builds and installs the binary to $GOPATH/bin
+    passing: false
+
+  - category: cli
+    description: CLI arguments and options are defined
+    items:
+      - month argument accepts text or numeric month, defaults to previous month
+      - year argument defaults to the year closest to the given month
+      - vendor option accepts the contractor name, required without config
+      - customer option accepts the client name, required without config
+      - rate option accepts the hourly rate, required without config
+      - hours option accepts hours per week worked, required without config
+      - pdf flag controls whether HTML is converted to PDF, defaults to false
+      - model option accepts an opencode-formatted model stub, defaults to anthropic/claude-haiku-4-5
+    passing: false
+
+  - category: config
+    description: Config file support
+    items:
+      - Options can be specified in ~/.invoicer/config.yaml
+      - CLI options take precedence over config file values
+      - set config subcommand accepts the same options as the main command (vendor, customer, rate, hours, pdf, model)
+      - set config writes specified options to ~/.invoicer/config.yaml, creating the file and directory if needed
+      - set config only updates the options that are explicitly provided, leaving others unchanged
+    passing: false
+
+  - category: invoice
+    description: Invoice generation logic
+    items:
+      - Invoices cover one calendar month
+      - Weeks are broken into weekly line items
+      - A week belongs to a month if its Wednesday falls in that month
+      - opencode is prompted to generate an HTML invoice with random styling
+      - HTML invoice is saved to a file
+      - When pdf flag is set, the HTML invoice is converted to a PDF file
+    passing: false
