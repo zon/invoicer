@@ -15,8 +15,8 @@ requirements:
       - Go module initialized as github.com/zon/invoicer
       - Kong is added as a dependency for CLI parsing
       - Main entrypoint exists at cmd/invoicer/main.go
-      - Makefile exists with an install target that builds and installs the binary to $GOPATH/bin
-    passing: true
+      - Makefile exists with an install target that runs go install to install the binary
+    passing: false
 
   - category: cli
     description: CLI arguments and options are defined
