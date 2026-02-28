@@ -39,7 +39,7 @@ requirements:
       - set config subcommand accepts the same options as the main command (vendor, customer, rate, hours, pdf, model)
       - set config writes specified options to ~/.invoicer/config.yaml, creating the file and directory if needed
       - set config only updates the options that are explicitly provided, leaving others unchanged
-    passing: false
+    passing: true
 
   - category: invoice
     description: Invoice generation logic
