@@ -16,7 +16,7 @@ requirements:
       - Kong is added as a dependency for CLI parsing
       - Main entrypoint exists at cmd/invoicer/main.go
       - Makefile exists with an install target that runs go install to install the binary
-    passing: false
+    passing: true
 
   - category: cli
     description: CLI arguments and options are defined

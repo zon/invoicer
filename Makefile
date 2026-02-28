@@ -1,7 +1,7 @@
 .PHONY: install build test
 
-install: build
-	cp bin/invoicer $(GOPATH)/bin/invoicer
+install:
+	go install ./cmd/invoicer
 
 build:
 	go build -o bin/invoicer ./cmd/invoicer
