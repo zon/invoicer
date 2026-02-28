@@ -16,7 +16,7 @@ requirements:
       - Kong is added as a dependency for CLI parsing
       - Main entrypoint exists at cmd/invoicer/main.go
       - Makefile exists with an install target that builds and installs the binary to $GOPATH/bin
-    passing: false
+    passing: true
 
   - category: cli
     description: CLI arguments and options are defined
@@ -29,7 +29,7 @@ requirements:
       - hours option accepts hours per week worked, required without config
       - pdf flag controls whether HTML is converted to PDF, defaults to false
       - model option accepts an opencode-formatted model stub, defaults to anthropic/claude-haiku-4-5
-    passing: false
+    passing: true
 
   - category: config
     description: Config file support

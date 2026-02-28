@@ -3,10 +3,51 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/alecthomas/kong"
 )
 
 func boolPtr(b bool) *bool { return &b }
+
+// TestCLIParsesWithoutPanic verifies that the CLI struct can be parsed by kong
+// without duplicate flag errors. This guards against regressions where sibling
+// subcommands happen to share flag names.
+func TestCLIParsesWithoutPanic(t *testing.T) {
+	var cmd CLI
+	_, err := kong.New(&cmd,
+		kong.Name("invoicer"),
+		kong.Description("Generate invoices for an hourly contractor."),
+		kong.Exit(func(int) {}),
+	)
+	if err != nil {
+		t.Fatalf("kong.New panicked or failed: %v", err)
+	}
+}
+
+// TestCLIGenerateIsDefault verifies the generate subcommand runs by default
+// (without explicitly typing 'generate').
+func TestCLIGenerateIsDefault(t *testing.T) {
+	var cmd CLI
+	p, err := kong.New(&cmd,
+		kong.Name("invoicer"),
+		kong.Exit(func(int) {}),
+	)
+	if err != nil {
+		t.Fatalf("kong.New failed: %v", err)
+	}
+	ctx, err := p.Parse([]string{"january"})
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if !strings.Contains(ctx.Command(), "generate") {
+		t.Errorf("expected default command to be 'generate', got %q", ctx.Command())
+	}
+	if cmd.Generate.Month != "january" {
+		t.Errorf("Month: got %q, want %q", cmd.Generate.Month, "january")
+	}
+}
 
 func writeTestConfig(t *testing.T, content string) string {
 	t.Helper()
@@ -19,7 +60,7 @@ func writeTestConfig(t *testing.T, content string) string {
 }
 
 func TestResolveOptions_NoConfig(t *testing.T) {
-	c := &CLI{
+	c := &GenerateCmd{
 		Vendor:   "My Vendor",
 		Customer: "My Customer",
 		Rate:     100,
@@ -60,7 +101,7 @@ hours: 20
 pdf: false
 model: anthropic/claude-haiku-4-5
 `)
-	c := &CLI{
+	c := &GenerateCmd{
 		Vendor:   "CLI Vendor",
 		Customer: "CLI Customer",
 		Rate:     150,
@@ -101,7 +142,7 @@ pdf: true
 model: anthropic/claude-haiku-4-5
 `)
 	// CLI provides no values (zero values).
-	c := &CLI{}
+	c := &GenerateCmd{}
 	opts, err := c.resolveOptions(path)
 	if err != nil {
 		t.Fatalf("resolveOptions: %v", err)
@@ -136,7 +177,7 @@ rate: 50
 hours: 20
 `)
 	// CLI only provides rate and vendor.
-	c := &CLI{
+	c := &GenerateCmd{
 		Vendor: "CLI Vendor",
 		Rate:   200,
 	}

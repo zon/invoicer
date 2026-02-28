@@ -10,6 +10,15 @@ import (
 
 // CLI is the root command for invoicer.
 type CLI struct {
+	// Generate is the default subcommand for generating an invoice.
+	Generate GenerateCmd `cmd:"" default:"withargs" help:"Generate an invoice for a given month."`
+
+	// Set is the 'set' subcommand group for managing configuration.
+	Set SetCmd `cmd:"" name:"set" help:"Subcommands for managing invoicer configuration."`
+}
+
+// GenerateCmd is the default subcommand for generating an invoice.
+type GenerateCmd struct {
 	// Month is the month to invoice for (text or numeric). Defaults to previous month.
 	Month string `arg:"" optional:"" help:"Month to invoice for (e.g. 'january', 'jan', or '1'). Defaults to previous month."`
 
@@ -33,15 +42,12 @@ type CLI struct {
 
 	// Model is the opencode-formatted model stub to use for generation.
 	Model string `short:"m" default:"anthropic/claude-haiku-4-5" help:"opencode-formatted model stub to use for invoice generation. Defaults to anthropic/claude-haiku-4-5."`
-
-	// Set is the 'set config' subcommand.
-	Set SetCmd `cmd:"" name:"set" help:"Subcommands for managing invoicer configuration."`
 }
 
 // resolveOptions merges config file values with CLI-provided values.
 // CLI values take precedence over config file values.
 // configPath may be empty to use the default path.
-func (c *CLI) resolveOptions(configPath string) (*ResolvedOptions, error) {
+func (c *GenerateCmd) resolveOptions(configPath string) (*ResolvedOptions, error) {
 	if configPath == "" {
 		var err error
 		configPath, err = config.DefaultPath()
@@ -111,8 +117,8 @@ type ResolvedOptions struct {
 	Model    string
 }
 
-// Run executes the root command (invoice generation).
-func (c *CLI) Run() error {
+// Run executes the generate subcommand (invoice generation).
+func (c *GenerateCmd) Run() error {
 	opts, err := c.resolveOptions("")
 	if err != nil {
 		return err
