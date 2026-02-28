@@ -50,4 +50,4 @@ requirements:
       - opencode is prompted to generate an HTML invoice with random styling
       - HTML invoice is saved to a file
       - When pdf flag is set, the HTML invoice is converted to a PDF file
-    passing: false
+    passing: true

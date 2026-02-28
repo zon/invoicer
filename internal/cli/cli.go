@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/zon/invoicer/internal/config"
+	"github.com/zon/invoicer/internal/invoice"
 )
 
 // CLI is the root command for invoicer.
@@ -112,10 +113,62 @@ type ResolvedOptions struct {
 
 // Run executes the root command (invoice generation).
 func (c *CLI) Run() error {
-	_, err := c.resolveOptions("")
+	opts, err := c.resolveOptions("")
 	if err != nil {
 		return err
 	}
-	// Invoice generation logic will be implemented in the invoice category.
+
+	// Validate required options.
+	if opts.Vendor == "" {
+		return fmt.Errorf("vendor is required (use --vendor or set in config)")
+	}
+	if opts.Customer == "" {
+		return fmt.Errorf("customer is required (use --customer or set in config)")
+	}
+	if opts.Rate == 0 {
+		return fmt.Errorf("rate is required (use --rate or set in config)")
+	}
+	if opts.Hours == 0 {
+		return fmt.Errorf("hours is required (use --hours or set in config)")
+	}
+
+	// Resolve month and year.
+	month, year, err := invoice.ResolveMonthYear(opts.Month, opts.Year, invoice.Now())
+	if err != nil {
+		return fmt.Errorf("resolving month/year: %w", err)
+	}
+
+	// Build invoice.
+	weeks := invoice.WeeksForMonth(year, month, opts.Hours)
+	inv := &invoice.Invoice{
+		Month:    month,
+		Year:     year,
+		Vendor:   opts.Vendor,
+		Customer: opts.Customer,
+		Rate:     opts.Rate,
+		Weeks:    weeks,
+	}
+
+	// Determine output paths.
+	dir := invoice.CurrentDir()
+	htmlPath := invoice.InvoiceFilePath(inv, dir)
+
+	// Generate HTML invoice via opencode.
+	fmt.Printf("Generating invoice for %s %d...\n", month.String(), year)
+	if err := invoice.GenerateHTML(inv, opts.Model, htmlPath); err != nil {
+		return fmt.Errorf("generating HTML invoice: %w", err)
+	}
+	fmt.Printf("HTML invoice written to: %s\n", htmlPath)
+
+	// Convert to PDF if requested.
+	if opts.PDF {
+		pdfPath := invoice.PDFFilePath(inv, dir)
+		fmt.Printf("Converting to PDF...\n")
+		if err := invoice.ConvertToPDF(htmlPath, pdfPath); err != nil {
+			return fmt.Errorf("converting to PDF: %w", err)
+		}
+		fmt.Printf("PDF invoice written to: %s\n", pdfPath)
+	}
+
 	return nil
 }
