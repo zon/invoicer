@@ -72,7 +72,7 @@ func BuildPrompt(inv *Invoice, outputPath string) string {
 	sb.WriteString(fmt.Sprintf("\nTotal Amount: $%.2f\n", inv.Total()))
 	sb.WriteString("\nRequirements:\n")
 	sb.WriteString("- Complete HTML5 document with embedded CSS styling\n")
-	sb.WriteString("- Unique, creative visual design with random color palette\n")
+	sb.WriteString("- Unique, creative visual design with random color palette, but always use a white background for print compatibility\n")
 	sb.WriteString("- Professional invoice layout with all line items shown in a table\n")
 	sb.WriteString("- Include invoice date and a generated invoice number\n")
 	sb.WriteString("- Show totals clearly\n")
