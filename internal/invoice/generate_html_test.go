@@ -336,27 +336,26 @@ func TestGenerateHTML_UsesWriteEventToConfirmSuccess(t *testing.T) {
 
 // --- ConvertToPDF tests ---
 
-func TestConvertToPDF_UsesAvailableTool(t *testing.T) {
-	// Create a fake "wkhtmltopdf" script in a temp dir and put it on PATH.
+func TestConvertToPDF_CallsPlaywrightAndCreatesPDF(t *testing.T) {
 	tmpDir := t.TempDir()
+	htmlPath := filepath.Join(tmpDir, "invoice.html")
+	pdfPath := filepath.Join(tmpDir, "invoice.pdf")
 
-	fakeWkhtmltopdf := filepath.Join(tmpDir, "wkhtmltopdf")
-	// Write a shell script that creates the output PDF file.
-	script := "#!/bin/sh\ntouch \"$2\"\n"
-	if err := os.WriteFile(fakeWkhtmltopdf, []byte(script), 0755); err != nil {
+	if err := os.WriteFile(htmlPath, []byte("<html></html>"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	// Prepend tmpDir to PATH.
-	origPath := os.Getenv("PATH")
-	os.Setenv("PATH", tmpDir+":"+origPath)
-	defer os.Setenv("PATH", origPath)
+	origConvert := invoice.PlaywrightConvert
+	defer func() { invoice.PlaywrightConvert = origConvert }()
 
-	htmlPath := filepath.Join(tmpDir, "invoice.html")
-	pdfPath := filepath.Join(tmpDir, "invoice.pdf")
-	// Create a dummy HTML file.
-	if err := os.WriteFile(htmlPath, []byte("<html></html>"), 0644); err != nil {
-		t.Fatal(err)
+	invoice.PlaywrightConvert = func(html, pdf string) error {
+		if html != htmlPath {
+			t.Errorf("htmlPath = %q, want %q", html, htmlPath)
+		}
+		if pdf != pdfPath {
+			t.Errorf("pdfPath = %q, want %q", pdf, pdfPath)
+		}
+		return os.WriteFile(pdf, []byte("%PDF-1.4 fake"), 0644)
 	}
 
 	if err := invoice.ConvertToPDF(htmlPath, pdfPath); err != nil {
@@ -368,14 +367,16 @@ func TestConvertToPDF_UsesAvailableTool(t *testing.T) {
 	}
 }
 
-func TestConvertToPDF_ReturnsErrorWhenNoToolFound(t *testing.T) {
-	// Use an empty PATH so no PDF tool is found.
-	origPath := os.Getenv("PATH")
-	os.Setenv("PATH", "")
-	defer os.Setenv("PATH", origPath)
+func TestConvertToPDF_ReturnsErrorWhenPlaywrightFails(t *testing.T) {
+	origConvert := invoice.PlaywrightConvert
+	defer func() { invoice.PlaywrightConvert = origConvert }()
+
+	invoice.PlaywrightConvert = func(html, pdf string) error {
+		return fmt.Errorf("chromium failed to launch")
+	}
 
 	err := invoice.ConvertToPDF("/tmp/invoice.html", "/tmp/invoice.pdf")
 	if err == nil {
-		t.Error("expected error when no PDF tool is available, got nil")
+		t.Error("expected error when Playwright fails, got nil")
 	}
 }

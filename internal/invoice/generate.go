@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/playwright-community/playwright-go"
 )
 
 // OpencodeExec is the function used to run the opencode subprocess.
@@ -150,40 +152,47 @@ func CheckOpencodeOutput(out []byte, expectedPath string) error {
 	return fmt.Errorf("opencode did not write the HTML invoice to %s", expectedPath)
 }
 
-// ConvertToPDF converts an HTML file to PDF using an available tool.
-// It tries wkhtmltopdf, then falls back to chromium/google-chrome headless.
+// PlaywrightConvert is the function used to convert an HTML file to PDF via Playwright.
+// It can be overridden in tests to avoid launching a real browser.
+var PlaywrightConvert = func(htmlPath, pdfPath string) error {
+	pw, err := playwright.Run()
+	if err != nil {
+		return fmt.Errorf("starting playwright: %w", err)
+	}
+	defer pw.Stop()
+
+	browser, err := pw.Chromium.Launch()
+	if err != nil {
+		return fmt.Errorf("launching chromium: %w", err)
+	}
+	defer browser.Close()
+
+	page, err := browser.NewPage()
+	if err != nil {
+		return fmt.Errorf("creating page: %w", err)
+	}
+
+	absPath, err := filepath.Abs(htmlPath)
+	if err != nil {
+		return fmt.Errorf("resolving path: %w", err)
+	}
+
+	if _, err := page.Goto("file://" + absPath); err != nil {
+		return fmt.Errorf("loading HTML file: %w", err)
+	}
+
+	if _, err := page.PDF(playwright.PagePdfOptions{
+		Path: playwright.String(pdfPath),
+	}); err != nil {
+		return fmt.Errorf("generating PDF: %w", err)
+	}
+
+	return nil
+}
+
+// ConvertToPDF converts an HTML file to PDF using Playwright (Chromium).
 func ConvertToPDF(htmlPath, pdfPath string) error {
-	// Try wkhtmltopdf first.
-	if path, err := exec.LookPath("wkhtmltopdf"); err == nil {
-		cmd := exec.Command(path, htmlPath, pdfPath)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("wkhtmltopdf: %w", err)
-		}
-		return nil
-	}
-
-	// Try chromium/google-chrome headless.
-	for _, browser := range []string{"chromium", "chromium-browser", "google-chrome", "google-chrome-stable"} {
-		if path, err := exec.LookPath(browser); err == nil {
-			cmd := exec.Command(path,
-				"--headless",
-				"--disable-gpu",
-				"--no-sandbox",
-				"--print-to-pdf="+pdfPath,
-				"file://"+htmlPath,
-			)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			if err := cmd.Run(); err != nil {
-				return fmt.Errorf("%s: %w", browser, err)
-			}
-			return nil
-		}
-	}
-
-	return fmt.Errorf("no PDF conversion tool found (install wkhtmltopdf or chromium)")
+	return PlaywrightConvert(htmlPath, pdfPath)
 }
 
 // OutputFilename returns the output filename for an invoice (without extension).
