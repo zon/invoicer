@@ -31,17 +31,17 @@ func TestWeeksForMonth_FullWeeks(t *testing.T) {
 
 func TestWeeksForMonth_WednesdayRule(t *testing.T) {
 	// January 2025: Jan 1 is Wednesday.
-	// The week with Wednesday Jan 1 should be included.
+	// The week with Wednesday Jan 1 should be included; its Monday is Dec 30, 2024.
 	weeks := invoice.WeeksForMonth(2025, time.January, 40)
 
 	if len(weeks) == 0 {
 		t.Fatal("expected at least one week")
 	}
 
-	// First week's start should be Jan 1 (clamped from Monday Dec 30).
 	first := weeks[0]
-	if first.Start.Day() != 1 || first.Start.Month() != time.January {
-		t.Errorf("expected first week to start Jan 1, got %v", first.Start)
+	wantStart := time.Date(2024, time.December, 30, 0, 0, 0, 0, time.UTC)
+	if !first.Start.Equal(wantStart) {
+		t.Errorf("expected first week to start %v, got %v", wantStart, first.Start)
 	}
 }
 
@@ -62,37 +62,33 @@ func TestWeeksForMonth_ExcludesAdjacentMonthWednesdays(t *testing.T) {
 	}
 }
 
-func TestWeeksForMonth_HoursProrated(t *testing.T) {
-	// Choose a month where the first or last week is partial.
-	// January 2025: Jan 1 is Wednesday. The week Mon Dec 30 - Sun Jan 5 has Wednesday Jan 1 in January.
-	// But the week is clamped to Jan 1 - Jan 5 (5 workdays Mon-Fri: but Mon/Tue are in Dec).
-	// Jan 1 (Wed), Jan 2 (Thu), Jan 3 (Fri) = 3 workdays out of 5 → 24 hours for 40h/week.
+func TestWeeksForMonth_FullHoursEveryWeek(t *testing.T) {
+	// Every Wednesday-anchored week is billed at the full hoursPerWeek,
+	// regardless of how the Mon-Sun span overlaps the month.
 	weeks := invoice.WeeksForMonth(2025, time.January, 40)
 	if len(weeks) == 0 {
 		t.Fatal("expected weeks")
 	}
-	first := weeks[0]
-	// Jan 1 (Wed), Jan 2 (Thu), Jan 3 (Fri) = 3 workdays
-	expectedHours := 40.0 * 3 / 5
-	if first.Hours != expectedHours {
-		t.Errorf("expected first week hours %.1f, got %.1f", expectedHours, first.Hours)
+	for i, w := range weeks {
+		if w.Hours != 40.0 {
+			t.Errorf("week %d: expected 40.0 hours, got %.1f (%v - %v)", i, w.Hours, w.Start, w.End)
+		}
 	}
 }
 
-func TestWeeksForMonth_FullWeekHours(t *testing.T) {
-	// A full Mon-Fri week should have exactly hoursPerWeek hours.
-	// January 2025 week 2: Jan 6 (Mon) - Jan 12 (Sun), Wednesday Jan 8 is in January.
-	weeks := invoice.WeeksForMonth(2025, time.January, 40)
-	// Find a week that starts on Monday and ends on Sunday entirely within January.
-	for _, w := range weeks {
-		if w.Start.Weekday() == time.Monday && w.End.Weekday() == time.Sunday {
-			if w.Hours != 40.0 {
-				t.Errorf("expected full week hours 40.0, got %.1f (week %v - %v)", w.Hours, w.Start, w.End)
-			}
-			return
-		}
+func TestWeeksForMonth_AprilTotal(t *testing.T) {
+	// April 2026 has 5 Wednesdays (1, 8, 15, 22, 29) → 5 weeks × 20h = 100h.
+	weeks := invoice.WeeksForMonth(2026, time.April, 20)
+	if len(weeks) != 5 {
+		t.Fatalf("expected 5 weeks, got %d", len(weeks))
 	}
-	// If no fully-unclamped week was found in January 2025, skip.
+	var total float64
+	for _, w := range weeks {
+		total += w.Hours
+	}
+	if total != 100.0 {
+		t.Errorf("expected 100.0 total hours, got %.1f", total)
+	}
 }
 
 func TestParseMonth_Numeric(t *testing.T) {

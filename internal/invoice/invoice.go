@@ -8,9 +8,9 @@ import (
 
 // Week represents a single weekly line item in an invoice.
 type Week struct {
-	// Start is the Monday of the week (or first day of the month if month starts mid-week).
+	// Start is the Monday of the week.
 	Start time.Time
-	// End is the Friday of the week (or last day of the month if month ends mid-week).
+	// End is the Sunday of the week.
 	End time.Time
 	// Hours is the number of hours worked this week.
 	Hours float64
@@ -43,20 +43,11 @@ func (inv *Invoice) Total() float64 {
 
 // WeeksForMonth returns the weeks that belong to the given month.
 // A week belongs to a month if its Wednesday falls in that month.
-// Weeks run Monday through Sunday.
+// Weeks run Monday through Sunday and are billed at the full hoursPerWeek.
 func WeeksForMonth(year int, month time.Month, hoursPerWeek float64) []Week {
-	// Find the first Wednesday in or after the 1st of the month.
-	// We iterate through the weeks whose Wednesday falls in the given month.
 	firstDay := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC)
 	lastDay := firstDay.AddDate(0, 1, -1)
 
-	var weeks []Week
-
-	// Find the first Wednesday >= firstDay of month.
-	// Then walk backwards to find the Monday of that week.
-	// Step through Wednesdays while they remain in the target month.
-
-	// Find day offset to first Wednesday.
 	wd := firstDay.Weekday()
 	var daysToFirstWed int
 	if wd <= time.Wednesday {
@@ -64,49 +55,18 @@ func WeeksForMonth(year int, month time.Month, hoursPerWeek float64) []Week {
 	} else {
 		daysToFirstWed = int(7 - wd + time.Wednesday)
 	}
-
 	firstWed := firstDay.AddDate(0, 0, daysToFirstWed)
 
+	var weeks []Week
 	for wed := firstWed; !wed.After(lastDay); wed = wed.AddDate(0, 0, 7) {
-		// Monday of this week
-		monday := wed.AddDate(0, 0, -2)
-		// Sunday of this week
-		sunday := wed.AddDate(0, 0, 4)
-
-		// Clamp to month boundaries for display purposes
-		weekStart := monday
-		if weekStart.Before(firstDay) {
-			weekStart = firstDay
-		}
-		weekEnd := sunday
-		if weekEnd.After(lastDay) {
-			weekEnd = lastDay
-		}
-
-		// Calculate prorated hours based on actual workdays (Mon-Fri) in the clamped range.
-		workdays := countWorkdays(weekStart, weekEnd)
-		hours := hoursPerWeek * float64(workdays) / 5.0
-
 		weeks = append(weeks, Week{
-			Start: weekStart,
-			End:   weekEnd,
-			Hours: hours,
+			Start: wed.AddDate(0, 0, -2),
+			End:   wed.AddDate(0, 0, 4),
+			Hours: hoursPerWeek,
 		})
 	}
 
 	return weeks
-}
-
-// countWorkdays counts Monday-Friday days between start and end (inclusive).
-func countWorkdays(start, end time.Time) int {
-	count := 0
-	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
-		wd := d.Weekday()
-		if wd >= time.Monday && wd <= time.Friday {
-			count++
-		}
-	}
-	return count
 }
 
 // ParseMonth parses a month string (text or numeric) and returns the time.Month value.
