@@ -78,6 +78,7 @@ func BuildPrompt(inv *Invoice, outputPath string) string {
 	sb.WriteString("- Unique, creative visual design with random color palette, but always use a white background for print compatibility\n")
 	sb.WriteString("- Professional invoice layout with all line items shown in a table\n")
 	sb.WriteString("- Include invoice date and a generated invoice number\n")
+	sb.WriteString("- Do NOT include a due date or payment terms\n")
 	sb.WriteString("- Show totals clearly\n")
 	sb.WriteString("- Write the file using the write tool - do not output the HTML in text\n")
 

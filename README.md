@@ -128,6 +128,8 @@ If `--pdf` is set, the HTML is also converted to a PDF at:
 invoice-<customer>-<year>-<MM>.pdf
 ```
 
+When `--pdf` is set, the HTML invoice is removed after the PDF is successfully generated, leaving only the PDF file.
+
 PDF conversion uses `wkhtmltopdf` if available, falling back to `chromium`, `chromium-browser`, `google-chrome`, or `google-chrome-stable` in headless mode.
 
 ## Development

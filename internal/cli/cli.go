@@ -188,6 +188,11 @@ func (c *GenerateCmd) Run() error {
 			return fmt.Errorf("converting to PDF: %w", err)
 		}
 		fmt.Printf("PDF invoice written to: %s\n", pdfPath)
+
+		if err := os.Remove(htmlPath); err != nil {
+			return fmt.Errorf("removing HTML invoice: %w", err)
+		}
+		fmt.Printf("Removed HTML invoice: %s\n", htmlPath)
 	}
 
 	return nil

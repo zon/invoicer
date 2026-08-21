@@ -130,6 +130,14 @@ func TestBuildPrompt_ContainsHTMLRequirements(t *testing.T) {
 	}
 }
 
+func TestBuildPrompt_ExcludesDueDate(t *testing.T) {
+	inv := testInvoice()
+	prompt := invoice.BuildPrompt(inv, "/tmp/invoice.html")
+	if !strings.Contains(strings.ToLower(prompt), "do not include a due date") {
+		t.Errorf("prompt should instruct to omit a due date, got: %s", prompt)
+	}
+}
+
 func TestBuildPrompt_InstructsWriteToolNotText(t *testing.T) {
 	inv := testInvoice()
 	prompt := invoice.BuildPrompt(inv, "/tmp/invoice.html")
