@@ -29,6 +29,7 @@ invoicer [<month> [<year>]] [options]
 |--------|-------|-------------|
 | `--vendor` | `-v` | Name of the contractor sending the invoice. Required if not set in config. |
 | `--customer` | `-c` | Name of the client receiving the invoice. Required if not set in config. |
+| `--project` | | Name of the project to annotate the invoice with. Optional. |
 | `--rate` | `-r` | Hourly rate in dollars. Required if not set in config. |
 | `--hours` | `-H` | Hours per week worked. Required if not set in config. |
 | `--pdf` | `-p` | Convert the HTML invoice to a PDF file. Defaults to `false`. |
@@ -49,6 +50,9 @@ invoicer 3 2025
 # Specify all options inline
 invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 150 --hours 40
 
+# Annotate the invoice with a project name
+invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 150 --hours 40 --project "Website Redesign"
+
 # Generate and convert to PDF
 invoicer -v "Jane Smith" -c "Acme Corp" -r 150 -H 40 --pdf
 ```
@@ -66,6 +70,7 @@ rate: 150
 hours: 40
 pdf: false
 model: deepseek/deepseek-v4-flash
+project: Website Redesign
 ```
 
 ### `set config` Subcommand
@@ -80,6 +85,7 @@ invoicer set config [options]
 |--------|-------------|
 | `--vendor` | Name of the contractor sending the invoice. |
 | `--customer` | Name of the client receiving the invoice. |
+| `--project` | Name of the project to annotate invoices with. |
 | `--rate` | Hourly rate in dollars. |
 | `--hours` | Hours per week worked. |
 | `--pdf` | Convert the HTML invoice to a PDF file. |
@@ -108,6 +114,12 @@ The HTML invoice is saved to the current directory as:
 
 ```
 invoice-<customer>-<year>-<MM>.html
+```
+
+or, when `--project` is set:
+
+```
+invoice-<customer>-<year>-<MM>-<project>.html
 ```
 
 If `--pdf` is set, the HTML is also converted to a PDF at:

@@ -26,6 +26,8 @@ type Invoice struct {
 	Vendor string
 	// Customer is the name of the client receiving the invoice.
 	Customer string
+	// Project is the optional name of the project this invoice is for.
+	Project string
 	// Rate is the hourly rate in dollars.
 	Rate float64
 	// Weeks is the list of weekly line items.

@@ -20,7 +20,7 @@ func TestLoad_FileNotExist(t *testing.T) {
 		t.Fatal("expected non-nil config")
 	}
 	// All fields should be zero values.
-	if cfg.Vendor != "" || cfg.Customer != "" || cfg.Rate != 0 || cfg.Hours != 0 || cfg.PDF != nil || cfg.Model != "" {
+	if cfg.Vendor != "" || cfg.Customer != "" || cfg.Rate != 0 || cfg.Hours != 0 || cfg.PDF != nil || cfg.Model != "" || cfg.Project != "" {
 		t.Errorf("expected empty config, got: %+v", cfg)
 	}
 }
@@ -34,6 +34,7 @@ rate: 150.5
 hours: 40
 pdf: true
 model: deepseek/deepseek-v4-flash
+project: Website Redesign
 `
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("writing test config: %v", err)
@@ -60,6 +61,9 @@ model: deepseek/deepseek-v4-flash
 	}
 	if cfg.Model != "deepseek/deepseek-v4-flash" {
 		t.Errorf("Model: got %q, want %q", cfg.Model, "deepseek/deepseek-v4-flash")
+	}
+	if cfg.Project != "Website Redesign" {
+		t.Errorf("Project: got %q, want %q", cfg.Project, "Website Redesign")
 	}
 }
 
@@ -162,6 +166,23 @@ func TestSave_MergesWithExisting(t *testing.T) {
 	}
 	if cfg.Hours != 40 {
 		t.Errorf("Hours: got %v, want 40 (should be unchanged)", cfg.Hours)
+	}
+}
+
+func TestSave_SavesProject(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	if err := config.Save(path, &config.Config{Project: "Mobile App"}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Project != "Mobile App" {
+		t.Errorf("Project: got %q, want %q", cfg.Project, "Mobile App")
 	}
 }
 

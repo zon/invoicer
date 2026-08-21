@@ -58,6 +58,9 @@ func BuildPrompt(inv *Invoice, outputPath string) string {
 	sb.WriteString(fmt.Sprintf("Invoice Details:\n"))
 	sb.WriteString(fmt.Sprintf("- Vendor (Contractor): %s\n", inv.Vendor))
 	sb.WriteString(fmt.Sprintf("- Customer (Client): %s\n", inv.Customer))
+	if inv.Project != "" {
+		sb.WriteString(fmt.Sprintf("- Project: %s\n", inv.Project))
+	}
 	sb.WriteString(fmt.Sprintf("- Month: %s %d\n", inv.Month.String(), inv.Year))
 	sb.WriteString(fmt.Sprintf("- Hourly Rate: $%.2f\n", inv.Rate))
 	sb.WriteString("\nWeekly Line Items:\n")
@@ -197,11 +200,15 @@ func ConvertToPDF(htmlPath, pdfPath string) error {
 
 // OutputFilename returns the output filename for an invoice (without extension).
 func OutputFilename(inv *Invoice) string {
-	return fmt.Sprintf("invoice-%s-%d-%02d",
+	name := fmt.Sprintf("invoice-%s-%d-%02d",
 		strings.ToLower(strings.ReplaceAll(inv.Customer, " ", "-")),
 		inv.Year,
 		int(inv.Month),
 	)
+	if inv.Project != "" {
+		name += "-" + strings.ToLower(strings.ReplaceAll(inv.Project, " ", "-"))
+	}
+	return name
 }
 
 // InvoiceFilePath returns the full path for the HTML invoice file.

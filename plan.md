@@ -7,6 +7,7 @@ args:
 options:
 - vendor - name of the contractor sending the invoice. required without config
 - customer - name of the client receiving the invoice. required without config
+- project - name of the project to annotate the invoice with. optional
 - rate - hourly rate. required without config
 - hours - hours per week worked. required without config
 - pdf - if the html should be converted to pdf. (we will need to pick a conversion tool.) defaults to false
@@ -22,4 +23,4 @@ build:
 - makefile with `make install` that builds and installs the binary to $GOPATH/bin
 
 subcommands:
-- set config - takes the same options as the main command (vendor, customer, rate, hours, pdf, model) and writes them to ~/.invoicer/config.yaml, creating it if it doesn't exist. only specified options are written; unspecified options are left unchanged.
+- set config - takes the same options as the main command (vendor, customer, project, rate, hours, pdf, model) and writes them to ~/.invoicer/config.yaml, creating it if it doesn't exist. only specified options are written; unspecified options are left unchanged.

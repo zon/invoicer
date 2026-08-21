@@ -31,6 +31,9 @@ type GenerateCmd struct {
 	// Customer is the name of the client receiving the invoice.
 	Customer string `short:"c" help:"Name of the client receiving the invoice. Required without config."`
 
+	// Project is an optional project name to annotate the invoice with.
+	Project string `help:"Name of the project to annotate the invoice with."`
+
 	// Rate is the hourly rate for the contractor.
 	Rate float64 `short:"r" help:"Hourly rate in dollars. Required without config."`
 
@@ -78,6 +81,11 @@ func (c *GenerateCmd) resolveOptions(configPath string) (*ResolvedOptions, error
 		opts.Customer = cfg.Customer
 	}
 
+	opts.Project = c.Project
+	if opts.Project == "" {
+		opts.Project = cfg.Project
+	}
+
 	// Merge numeric fields: CLI takes precedence (non-zero), fall back to config.
 	opts.Rate = c.Rate
 	if opts.Rate == 0 {
@@ -111,6 +119,7 @@ type ResolvedOptions struct {
 	Year     int
 	Vendor   string
 	Customer string
+	Project  string
 	Rate     float64
 	Hours    float64
 	PDF      bool
@@ -151,6 +160,7 @@ func (c *GenerateCmd) Run() error {
 		Year:     year,
 		Vendor:   opts.Vendor,
 		Customer: opts.Customer,
+		Project:  opts.Project,
 		Rate:     opts.Rate,
 		Weeks:    weeks,
 	}

@@ -21,6 +21,20 @@ func TestOutputFilename(t *testing.T) {
 	}
 }
 
+func TestOutputFilename_WithProject(t *testing.T) {
+	inv := &invoice.Invoice{
+		Customer: "Acme Corp",
+		Project:  "Website Redesign",
+		Year:     2025,
+		Month:    time.January,
+	}
+	got := invoice.OutputFilename(inv)
+	want := "invoice-acme-corp-2025-01-website-redesign"
+	if got != want {
+		t.Errorf("OutputFilename() = %q, want %q", got, want)
+	}
+}
+
 func TestOutputFilename_SimpleCustomer(t *testing.T) {
 	inv := &invoice.Invoice{
 		Customer: "Google",

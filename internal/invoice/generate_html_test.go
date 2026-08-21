@@ -64,6 +64,23 @@ func TestBuildPrompt_ContainsMonthYear(t *testing.T) {
 	}
 }
 
+func TestBuildPrompt_ContainsProject(t *testing.T) {
+	inv := testInvoice()
+	inv.Project = "Mobile App"
+	prompt := invoice.BuildPrompt(inv, "/tmp/invoice.html")
+	if !strings.Contains(prompt, "Mobile App") {
+		t.Errorf("prompt does not contain project name, got: %s", prompt)
+	}
+}
+
+func TestBuildPrompt_OmitsProjectWhenEmpty(t *testing.T) {
+	inv := testInvoice()
+	prompt := invoice.BuildPrompt(inv, "/tmp/invoice.html")
+	if strings.Contains(strings.ToLower(prompt), "project:") {
+		t.Errorf("prompt should not contain project line when unset, got: %s", prompt)
+	}
+}
+
 func TestBuildPrompt_ContainsRate(t *testing.T) {
 	inv := testInvoice()
 	prompt := invoice.BuildPrompt(inv, "/tmp/invoice.html")

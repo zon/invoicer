@@ -63,6 +63,7 @@ func TestResolveOptions_NoConfig(t *testing.T) {
 	c := &GenerateCmd{
 		Vendor:   "My Vendor",
 		Customer: "My Customer",
+		Project:  "My Project",
 		Rate:     100,
 		Hours:    40,
 		PDF:      true,
@@ -78,6 +79,9 @@ func TestResolveOptions_NoConfig(t *testing.T) {
 	}
 	if opts.Customer != "My Customer" {
 		t.Errorf("Customer: got %q, want %q", opts.Customer, "My Customer")
+	}
+	if opts.Project != "My Project" {
+		t.Errorf("Project: got %q, want %q", opts.Project, "My Project")
 	}
 	if opts.Rate != 100 {
 		t.Errorf("Rate: got %v, want 100", opts.Rate)
@@ -100,10 +104,12 @@ rate: 50
 hours: 20
 pdf: false
 model: deepseek/deepseek-v4-flash
+project: Config Project
 `)
 	c := &GenerateCmd{
 		Vendor:   "CLI Vendor",
 		Customer: "CLI Customer",
+		Project:  "CLI Project",
 		Rate:     150,
 		Hours:    35,
 		PDF:      true,
@@ -118,6 +124,9 @@ model: deepseek/deepseek-v4-flash
 	}
 	if opts.Customer != "CLI Customer" {
 		t.Errorf("Customer: CLI should override config; got %q", opts.Customer)
+	}
+	if opts.Project != "CLI Project" {
+		t.Errorf("Project: CLI should override config; got %q", opts.Project)
 	}
 	if opts.Rate != 150 {
 		t.Errorf("Rate: CLI should override config; got %v", opts.Rate)
@@ -140,6 +149,7 @@ rate: 50
 hours: 20
 pdf: true
 model: deepseek/deepseek-v4-flash
+project: Config Project
 `)
 	// CLI provides no values (zero values).
 	c := &GenerateCmd{}
@@ -152,6 +162,9 @@ model: deepseek/deepseek-v4-flash
 	}
 	if opts.Customer != "Config Customer" {
 		t.Errorf("Customer: expected config fallback; got %q", opts.Customer)
+	}
+	if opts.Project != "Config Project" {
+		t.Errorf("Project: expected config fallback; got %q", opts.Project)
 	}
 	if opts.Rate != 50 {
 		t.Errorf("Rate: expected config fallback; got %v", opts.Rate)

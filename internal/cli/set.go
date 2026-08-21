@@ -21,6 +21,9 @@ type SetConfigCmd struct {
 	// Customer is the name of the client receiving the invoice.
 	Customer string `help:"Name of the client receiving the invoice."`
 
+	// Project is an optional project name to annotate invoices with.
+	Project string `help:"Name of the project to annotate invoices with."`
+
 	// Rate is the hourly rate for the contractor.
 	Rate float64 `help:"Hourly rate in dollars."`
 
@@ -59,6 +62,7 @@ func RunSetConfig(s *SetConfigCmd, path string) error {
 		Hours:    s.Hours,
 		PDF:      s.PDF,
 		Model:    s.Model,
+		Project:  s.Project,
 	}
 
 	if err := config.Save(path, updates); err != nil {

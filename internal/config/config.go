@@ -18,6 +18,7 @@ type Config struct {
 	Hours    float64 `yaml:"hours,omitempty"`
 	PDF      *bool   `yaml:"pdf,omitempty"`
 	Model    string  `yaml:"model,omitempty"`
+	Project  string  `yaml:"project,omitempty"`
 }
 
 // DefaultPath returns the default path to the config file (~/.invoicer/config.yaml).
@@ -75,6 +76,9 @@ func Save(path string, updates *Config) error {
 	}
 	if updates.Model != "" {
 		existing.Model = updates.Model
+	}
+	if updates.Project != "" {
+		existing.Project = updates.Project
 	}
 
 	// Ensure the directory exists.

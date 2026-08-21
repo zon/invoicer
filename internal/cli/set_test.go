@@ -19,6 +19,7 @@ func TestRunSetConfig_CreatesConfig(t *testing.T) {
 		Hours:    40,
 		PDF:      boolPtr(true),
 		Model:    "deepseek/deepseek-v4-flash",
+		Project:  "Test Project",
 	}
 
 	if err := RunSetConfig(cmd, path); err != nil {
@@ -46,6 +47,9 @@ func TestRunSetConfig_CreatesConfig(t *testing.T) {
 	}
 	if cfg.Model != "deepseek/deepseek-v4-flash" {
 		t.Errorf("Model: got %q, want %q", cfg.Model, "deepseek/deepseek-v4-flash")
+	}
+	if cfg.Project != "Test Project" {
+		t.Errorf("Project: got %q, want %q", cfg.Project, "Test Project")
 	}
 }
 
