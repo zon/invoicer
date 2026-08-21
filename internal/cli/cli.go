@@ -3,6 +3,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/zon/invoicer/internal/config"
 	"github.com/zon/invoicer/internal/invoice"
@@ -166,7 +167,10 @@ func (c *GenerateCmd) Run() error {
 	}
 
 	// Determine output paths.
-	dir := invoice.CurrentDir()
+	dir := invoice.InvoiceDir(inv)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("creating invoice directory: %w", err)
+	}
 	htmlPath := invoice.InvoiceFilePath(inv, dir)
 
 	// Generate HTML invoice via opencode.

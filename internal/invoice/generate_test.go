@@ -48,6 +48,17 @@ func TestOutputFilename_SimpleCustomer(t *testing.T) {
 	}
 }
 
+func TestInvoiceDir(t *testing.T) {
+	inv := &invoice.Invoice{
+		Customer: "Acme Corp",
+	}
+	got := invoice.InvoiceDir(inv)
+	want := "invoices/acme-corp/unpaid"
+	if got != want {
+		t.Errorf("InvoiceDir() = %q, want %q", got, want)
+	}
+}
+
 func TestInvoiceFilePath(t *testing.T) {
 	inv := &invoice.Invoice{
 		Customer: "Stripe",

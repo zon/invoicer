@@ -198,15 +198,26 @@ func ConvertToPDF(htmlPath, pdfPath string) error {
 	return PlaywrightConvert(htmlPath, pdfPath)
 }
 
+// ClientSlug returns a filesystem-safe identifier for the client.
+func ClientSlug(name string) string {
+	return strings.ToLower(strings.ReplaceAll(name, " ", "-"))
+}
+
+// InvoiceDir returns the directory where invoice files are written:
+// ./invoices/<client>/unpaid
+func InvoiceDir(inv *Invoice) string {
+	return filepath.Join("invoices", ClientSlug(inv.Customer), "unpaid")
+}
+
 // OutputFilename returns the output filename for an invoice (without extension).
 func OutputFilename(inv *Invoice) string {
 	name := fmt.Sprintf("invoice-%s-%d-%02d",
-		strings.ToLower(strings.ReplaceAll(inv.Customer, " ", "-")),
+		ClientSlug(inv.Customer),
 		inv.Year,
 		int(inv.Month),
 	)
 	if inv.Project != "" {
-		name += "-" + strings.ToLower(strings.ReplaceAll(inv.Project, " ", "-"))
+		name += "-" + ClientSlug(inv.Project)
 	}
 	return name
 }
