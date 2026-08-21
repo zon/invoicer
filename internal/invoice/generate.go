@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/playwright-community/playwright-go"
+	"github.com/mxschmitt/playwright-go"
 )
 
 // OpencodeExec is the function used to run the opencode subprocess.
