@@ -5,7 +5,7 @@ Generate monthly HTML (and optionally PDF) invoices for hourly contractors. Invo
 ## Installation
 
 ```
-make install
+just install
 ```
 
 Requires `$GOPATH/bin` to be in your `PATH`. Also requires `opencode` to be installed for invoice generation.
@@ -121,7 +121,8 @@ PDF conversion uses `wkhtmltopdf` if available, falling back to `chromium`, `chr
 ## Development
 
 ```bash
-make build   # Build the binary to bin/invoicer
-make install # Build and install to $GOPATH/bin
-make test    # Run all tests
+just build   # Build the binary to bin/invoicer
+just install # Build and install to $GOPATH/bin
+just test    # Run all tests
+just         # List available recipes
 ```

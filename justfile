@@ -1,5 +1,3 @@
-.PHONY: install build test
-
 install:
 	go install ./cmd/invoicer
 
@@ -8,3 +6,6 @@ build:
 
 test:
 	go test ./...
+
+default:
+	just --list
