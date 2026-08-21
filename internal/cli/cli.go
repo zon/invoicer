@@ -41,7 +41,7 @@ type GenerateCmd struct {
 	PDF bool `short:"p" help:"Convert the HTML invoice to a PDF file. Defaults to false."`
 
 	// Model is the opencode-formatted model stub to use for generation.
-	Model string `short:"m" default:"anthropic/claude-haiku-4-5" help:"opencode-formatted model stub to use for invoice generation. Defaults to anthropic/claude-haiku-4-5."`
+	Model string `short:"m" default:"deepseek/deepseek-v4-flash" help:"opencode-formatted model stub to use for invoice generation. Defaults to deepseek/deepseek-v4-flash."`
 }
 
 // resolveOptions merges config file values with CLI-provided values.
@@ -94,7 +94,7 @@ func (c *GenerateCmd) resolveOptions(configPath string) (*ResolvedOptions, error
 		opts.PDF = *cfg.PDF
 	}
 
-	// Merge model: CLI default is "anthropic/claude-haiku-4-5"; config may override
+	// Merge model: CLI default is "deepseek/deepseek-v4-flash"; config may override
 	// but CLI explicit value takes precedence. Since we can't distinguish CLI default
 	// from user-specified, we prefer the CLI value (which may be the default).
 	opts.Model = c.Model

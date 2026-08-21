@@ -33,7 +33,7 @@ customer: Big Client
 rate: 150.5
 hours: 40
 pdf: true
-model: anthropic/claude-haiku-4-5
+model: deepseek/deepseek-v4-flash
 `
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("writing test config: %v", err)
@@ -58,8 +58,8 @@ model: anthropic/claude-haiku-4-5
 	if cfg.PDF == nil || !*cfg.PDF {
 		t.Errorf("PDF: got %v, want true", cfg.PDF)
 	}
-	if cfg.Model != "anthropic/claude-haiku-4-5" {
-		t.Errorf("Model: got %q, want %q", cfg.Model, "anthropic/claude-haiku-4-5")
+	if cfg.Model != "deepseek/deepseek-v4-flash" {
+		t.Errorf("Model: got %q, want %q", cfg.Model, "deepseek/deepseek-v4-flash")
 	}
 }
 
@@ -85,7 +85,7 @@ func TestSave_CreatesFileAndDirectory(t *testing.T) {
 		Rate:     100,
 		Hours:    35,
 		PDF:      boolPtr(false),
-		Model:    "anthropic/claude-haiku-4-5",
+		Model:    "deepseek/deepseek-v4-flash",
 	}
 
 	if err := config.Save(path, updates); err != nil {
@@ -115,8 +115,8 @@ func TestSave_CreatesFileAndDirectory(t *testing.T) {
 	if cfg.PDF == nil || *cfg.PDF != false {
 		t.Errorf("PDF: got %v, want false", cfg.PDF)
 	}
-	if cfg.Model != "anthropic/claude-haiku-4-5" {
-		t.Errorf("Model: got %q, want %q", cfg.Model, "anthropic/claude-haiku-4-5")
+	if cfg.Model != "deepseek/deepseek-v4-flash" {
+		t.Errorf("Model: got %q, want %q", cfg.Model, "deepseek/deepseek-v4-flash")
 	}
 }
 
@@ -176,7 +176,7 @@ func TestSave_OnlyUpdatesSpecifiedFields(t *testing.T) {
 		Rate:     50,
 		Hours:    20,
 		PDF:      boolPtr(true),
-		Model:    "anthropic/claude-haiku-4-5",
+		Model:    "deepseek/deepseek-v4-flash",
 	}
 	if err := config.Save(path, initial); err != nil {
 		t.Fatalf("initial Save: %v", err)
@@ -207,7 +207,7 @@ func TestSave_OnlyUpdatesSpecifiedFields(t *testing.T) {
 	if cfg.PDF == nil || *cfg.PDF != false {
 		t.Errorf("PDF should be updated to false: got %v", cfg.PDF)
 	}
-	if cfg.Model != "anthropic/claude-haiku-4-5" {
+	if cfg.Model != "deepseek/deepseek-v4-flash" {
 		t.Errorf("Model should be unchanged: got %q", cfg.Model)
 	}
 }

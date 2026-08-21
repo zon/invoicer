@@ -66,7 +66,7 @@ func TestResolveOptions_NoConfig(t *testing.T) {
 		Rate:     100,
 		Hours:    40,
 		PDF:      true,
-		Model:    "anthropic/claude-haiku-4-5",
+		Model:    "deepseek/deepseek-v4-flash",
 	}
 	path := filepath.Join(t.TempDir(), "nonexistent.yaml")
 	opts, err := c.resolveOptions(path)
@@ -88,8 +88,8 @@ func TestResolveOptions_NoConfig(t *testing.T) {
 	if !opts.PDF {
 		t.Error("PDF: got false, want true")
 	}
-	if opts.Model != "anthropic/claude-haiku-4-5" {
-		t.Errorf("Model: got %q, want %q", opts.Model, "anthropic/claude-haiku-4-5")
+	if opts.Model != "deepseek/deepseek-v4-flash" {
+		t.Errorf("Model: got %q, want %q", opts.Model, "deepseek/deepseek-v4-flash")
 	}
 }
 
@@ -99,7 +99,7 @@ customer: Config Customer
 rate: 50
 hours: 20
 pdf: false
-model: anthropic/claude-haiku-4-5
+model: deepseek/deepseek-v4-flash
 `)
 	c := &GenerateCmd{
 		Vendor:   "CLI Vendor",
@@ -107,7 +107,7 @@ model: anthropic/claude-haiku-4-5
 		Rate:     150,
 		Hours:    35,
 		PDF:      true,
-		Model:    "anthropic/claude-sonnet-4-6",
+		Model:    "deepseek/deepseek-v4-flash",
 	}
 	opts, err := c.resolveOptions(path)
 	if err != nil {
@@ -128,7 +128,7 @@ model: anthropic/claude-haiku-4-5
 	if !opts.PDF {
 		t.Error("PDF: CLI true should override config false")
 	}
-	if opts.Model != "anthropic/claude-sonnet-4-6" {
+	if opts.Model != "deepseek/deepseek-v4-flash" {
 		t.Errorf("Model: CLI should override config; got %q", opts.Model)
 	}
 }
@@ -139,7 +139,7 @@ customer: Config Customer
 rate: 50
 hours: 20
 pdf: true
-model: anthropic/claude-haiku-4-5
+model: deepseek/deepseek-v4-flash
 `)
 	// CLI provides no values (zero values).
 	c := &GenerateCmd{}
@@ -163,9 +163,9 @@ model: anthropic/claude-haiku-4-5
 		t.Error("PDF: expected config fallback true; got false")
 	}
 	// Model: c.Model is "" (zero) so config is used, but actually since kong sets
-	// the default "anthropic/claude-haiku-4-5" at parse time, in unit tests c.Model
+	// the default "deepseek/deepseek-v4-flash" at parse time, in unit tests c.Model
 	// is "" — so here we expect the config value.
-	if opts.Model != "anthropic/claude-haiku-4-5" {
+	if opts.Model != "deepseek/deepseek-v4-flash" {
 		t.Errorf("Model: expected config fallback; got %q", opts.Model)
 	}
 }

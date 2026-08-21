@@ -26,7 +26,7 @@ var OpencodeExec = func(model, dir, prompt string) ([]byte, error) {
 }
 
 // GenerateHTML prompts opencode to generate an HTML invoice and writes it to outputPath.
-// model is the opencode-formatted model stub (e.g. "anthropic/claude-haiku-4-5").
+// model is the opencode-formatted model stub (e.g. "deepseek/deepseek-v4-flash").
 func GenerateHTML(inv *Invoice, model, outputPath string) error {
 	prompt := BuildPrompt(inv, outputPath)
 

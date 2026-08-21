@@ -18,7 +18,7 @@ func TestRunSetConfig_CreatesConfig(t *testing.T) {
 		Rate:     120,
 		Hours:    40,
 		PDF:      boolPtr(true),
-		Model:    "anthropic/claude-haiku-4-5",
+		Model:    "deepseek/deepseek-v4-flash",
 	}
 
 	if err := RunSetConfig(cmd, path); err != nil {
@@ -44,8 +44,8 @@ func TestRunSetConfig_CreatesConfig(t *testing.T) {
 	if cfg.PDF == nil || !*cfg.PDF {
 		t.Errorf("PDF: got %v, want true", cfg.PDF)
 	}
-	if cfg.Model != "anthropic/claude-haiku-4-5" {
-		t.Errorf("Model: got %q, want %q", cfg.Model, "anthropic/claude-haiku-4-5")
+	if cfg.Model != "deepseek/deepseek-v4-flash" {
+		t.Errorf("Model: got %q, want %q", cfg.Model, "deepseek/deepseek-v4-flash")
 	}
 }
 

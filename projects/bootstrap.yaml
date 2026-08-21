@@ -28,7 +28,7 @@ requirements:
       - rate option accepts the hourly rate, required without config
       - hours option accepts hours per week worked, required without config
       - pdf flag controls whether HTML is converted to PDF, defaults to false
-      - model option accepts an opencode-formatted model stub, defaults to anthropic/claude-haiku-4-5
+      - model option accepts an opencode-formatted model stub, defaults to deepseek/deepseek-v4-flash
     passing: true
 
   - category: config
