@@ -277,12 +277,12 @@ func TestGenerateHTML_CallsOpencodeWithCorrectArgs(t *testing.T) {
 		return []byte(""), nil
 	}
 
-	if err := invoice.GenerateHTML(inv, "deepseek/deepseek-v4-flash", outputPath); err != nil {
+	if err := invoice.GenerateHTML(inv, "deepseek/deepseek-flash", outputPath); err != nil {
 		t.Fatalf("GenerateHTML() error: %v", err)
 	}
 
-	if capturedModel != "deepseek/deepseek-v4-flash" {
-		t.Errorf("model = %q, want %q", capturedModel, "deepseek/deepseek-v4-flash")
+	if capturedModel != "deepseek/deepseek-flash" {
+		t.Errorf("model = %q, want %q", capturedModel, "deepseek/deepseek-flash")
 	}
 	if capturedDir != tmpDir {
 		t.Errorf("dir = %q, want %q", capturedDir, tmpDir)
@@ -309,7 +309,7 @@ func TestGenerateHTML_WritesHTMLFile(t *testing.T) {
 		return []byte(""), nil
 	}
 
-	if err := invoice.GenerateHTML(inv, "deepseek/deepseek-v4-flash", outputPath); err != nil {
+	if err := invoice.GenerateHTML(inv, "deepseek/deepseek-flash", outputPath); err != nil {
 		t.Fatalf("GenerateHTML() error: %v", err)
 	}
 
@@ -331,7 +331,7 @@ func TestGenerateHTML_ReturnsErrorWhenOpencodeFailsAndNoFile(t *testing.T) {
 		return []byte(""), nil
 	}
 
-	err := invoice.GenerateHTML(inv, "deepseek/deepseek-v4-flash", outputPath)
+	err := invoice.GenerateHTML(inv, "deepseek/deepseek-flash", outputPath)
 	if err == nil {
 		t.Error("expected error when opencode writes no file, got nil")
 	}
@@ -354,7 +354,7 @@ func TestGenerateHTML_UsesWriteEventToConfirmSuccess(t *testing.T) {
 		return []byte(event), nil
 	}
 
-	if err := invoice.GenerateHTML(inv, "deepseek/deepseek-v4-flash", outputPath); err != nil {
+	if err := invoice.GenerateHTML(inv, "deepseek/deepseek-flash", outputPath); err != nil {
 		t.Fatalf("GenerateHTML() error: %v", err)
 	}
 }

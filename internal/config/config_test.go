@@ -33,7 +33,7 @@ customer: Big Client
 rate: 150.5
 hours: 40
 pdf: true
-model: deepseek/deepseek-v4-flash
+model: deepseek/deepseek-flash
 project: Website Redesign
 `
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
@@ -59,8 +59,8 @@ project: Website Redesign
 	if cfg.PDF == nil || !*cfg.PDF {
 		t.Errorf("PDF: got %v, want true", cfg.PDF)
 	}
-	if cfg.Model != "deepseek/deepseek-v4-flash" {
-		t.Errorf("Model: got %q, want %q", cfg.Model, "deepseek/deepseek-v4-flash")
+	if cfg.Model != "deepseek/deepseek-flash" {
+		t.Errorf("Model: got %q, want %q", cfg.Model, "deepseek/deepseek-flash")
 	}
 	if cfg.Project != "Website Redesign" {
 		t.Errorf("Project: got %q, want %q", cfg.Project, "Website Redesign")
@@ -89,7 +89,7 @@ func TestSave_CreatesFileAndDirectory(t *testing.T) {
 		Rate:     100,
 		Hours:    35,
 		PDF:      boolPtr(false),
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek/deepseek-flash",
 	}
 
 	if err := config.Save(path, updates); err != nil {
@@ -119,8 +119,8 @@ func TestSave_CreatesFileAndDirectory(t *testing.T) {
 	if cfg.PDF == nil || *cfg.PDF != false {
 		t.Errorf("PDF: got %v, want false", cfg.PDF)
 	}
-	if cfg.Model != "deepseek/deepseek-v4-flash" {
-		t.Errorf("Model: got %q, want %q", cfg.Model, "deepseek/deepseek-v4-flash")
+	if cfg.Model != "deepseek/deepseek-flash" {
+		t.Errorf("Model: got %q, want %q", cfg.Model, "deepseek/deepseek-flash")
 	}
 }
 
@@ -197,7 +197,7 @@ func TestSave_OnlyUpdatesSpecifiedFields(t *testing.T) {
 		Rate:     50,
 		Hours:    20,
 		PDF:      boolPtr(true),
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek/deepseek-flash",
 	}
 	if err := config.Save(path, initial); err != nil {
 		t.Fatalf("initial Save: %v", err)
@@ -228,7 +228,7 @@ func TestSave_OnlyUpdatesSpecifiedFields(t *testing.T) {
 	if cfg.PDF == nil || *cfg.PDF != false {
 		t.Errorf("PDF should be updated to false: got %v", cfg.PDF)
 	}
-	if cfg.Model != "deepseek/deepseek-v4-flash" {
+	if cfg.Model != "deepseek/deepseek-flash" {
 		t.Errorf("Model should be unchanged: got %q", cfg.Model)
 	}
 }

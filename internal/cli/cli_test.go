@@ -67,7 +67,7 @@ func TestResolveOptions_NoConfig(t *testing.T) {
 		Rate:     100,
 		Hours:    40,
 		PDF:      true,
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek/deepseek-flash",
 	}
 	path := filepath.Join(t.TempDir(), "nonexistent.yaml")
 	opts, err := c.resolveOptions(path)
@@ -92,8 +92,8 @@ func TestResolveOptions_NoConfig(t *testing.T) {
 	if !opts.PDF {
 		t.Error("PDF: got false, want true")
 	}
-	if opts.Model != "deepseek/deepseek-v4-flash" {
-		t.Errorf("Model: got %q, want %q", opts.Model, "deepseek/deepseek-v4-flash")
+	if opts.Model != "deepseek/deepseek-flash" {
+		t.Errorf("Model: got %q, want %q", opts.Model, "deepseek/deepseek-flash")
 	}
 }
 
@@ -103,7 +103,7 @@ customer: Config Customer
 rate: 50
 hours: 20
 pdf: false
-model: deepseek/deepseek-v4-flash
+model: deepseek/deepseek-flash
 project: Config Project
 `)
 	c := &GenerateCmd{
@@ -113,7 +113,7 @@ project: Config Project
 		Rate:     150,
 		Hours:    35,
 		PDF:      true,
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek/deepseek-flash",
 	}
 	opts, err := c.resolveOptions(path)
 	if err != nil {
@@ -137,7 +137,7 @@ project: Config Project
 	if !opts.PDF {
 		t.Error("PDF: CLI true should override config false")
 	}
-	if opts.Model != "deepseek/deepseek-v4-flash" {
+	if opts.Model != "deepseek/deepseek-flash" {
 		t.Errorf("Model: CLI should override config; got %q", opts.Model)
 	}
 }
@@ -148,7 +148,7 @@ customer: Config Customer
 rate: 50
 hours: 20
 pdf: true
-model: deepseek/deepseek-v4-flash
+model: deepseek/deepseek-flash
 project: Config Project
 `)
 	// CLI provides no values (zero values).
@@ -175,11 +175,21 @@ project: Config Project
 	if !opts.PDF {
 		t.Error("PDF: expected config fallback true; got false")
 	}
-	// Model: c.Model is "" (zero) so config is used, but actually since kong sets
-	// the default "deepseek/deepseek-v4-flash" at parse time, in unit tests c.Model
-	// is "" — so here we expect the config value.
-	if opts.Model != "deepseek/deepseek-v4-flash" {
+	// Model: c.Model is "" (zero) so the config value is used.
+	if opts.Model != "deepseek/deepseek-flash" {
 		t.Errorf("Model: expected config fallback; got %q", opts.Model)
+	}
+}
+
+func TestResolveOptions_DefaultModel(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nonexistent.yaml")
+	c := &GenerateCmd{}
+	opts, err := c.resolveOptions(path)
+	if err != nil {
+		t.Fatalf("resolveOptions: %v", err)
+	}
+	if opts.Model != DefaultModel {
+		t.Errorf("Model: expected default %q; got %q", DefaultModel, opts.Model)
 	}
 }
 

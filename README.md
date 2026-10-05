@@ -33,7 +33,7 @@ invoicer [<month> [<year>]] [options]
 | `--rate` | `-r` | Hourly rate in dollars. Required if not set in config. |
 | `--hours` | `-H` | Hours per week worked. Required if not set in config. |
 | `--pdf` | `-p` | Convert the HTML invoice to a PDF file. Defaults to `false`. |
-| `--model` | `-m` | opencode-formatted model stub for invoice generation. Defaults to `deepseek/deepseek-v4-flash`. |
+| `--model` | `-m` | opencode-formatted model stub for invoice generation. Defaults to `deepseek/deepseek-flash`. |
 
 ### Examples
 
@@ -69,7 +69,7 @@ customer: Acme Corp
 rate: 150
 hours: 40
 pdf: false
-model: deepseek/deepseek-v4-flash
+model: deepseek/deepseek-flash
 project: Website Redesign
 ```
 

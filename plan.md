@@ -11,7 +11,7 @@ options:
 - rate - hourly rate. required without config
 - hours - hours per week worked. required without config
 - pdf - if the html should be converted to pdf. (we will need to pick a conversion tool.) defaults to false
-- model - opencode formatted model stub to prompt. defaults to deepseek/deepseek-v4-flash
+- model - opencode formatted model stub to prompt. defaults to deepseek/deepseek-flash
 
 invoices cover one month. with weekly items. a week belongs to a month if it's wednesday is in that month. options can be specified in an ~/.invoicer/config.yaml file. options passed to the app take precedence over those in the config file.
 
