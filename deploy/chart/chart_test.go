@@ -315,23 +315,33 @@ func TestConfigRenderingUsesValues(t *testing.T) {
 	equal(t, "oidc.groupsClaim", cfg.OIDC.GroupsClaim, "roles")
 }
 
+func deploymentPodSpec(t *testing.T, manifests []map[string]any) map[string]any {
+	t.Helper()
+	deployment := findKind(t, manifests, "Deployment")
+	return deployment["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
+}
+
+func webContainer(t *testing.T, manifests []map[string]any) map[string]any {
+	t.Helper()
+	containers, _ := deploymentPodSpec(t, manifests)["containers"].([]any)
+	if len(containers) != 1 {
+		t.Fatalf("deployment runs %d containers, want one", len(containers))
+	}
+	return containers[0].(map[string]any)
+}
+
 func TestConfigMountIsReadOnly(t *testing.T) {
 	const configPath = "/home/invoicer/.invoicer/config.yaml"
 	manifests := renderChart(t)
 	configMap := findKind(t, manifests, "ConfigMap")
-	deployment := findKind(t, manifests, "Deployment")
 
 	configName, _ := configMap["metadata"].(map[string]any)["name"].(string)
 	if configName == "" {
 		t.Fatal("config map has no name")
 	}
 
-	podSpec := deployment["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
-	containers := podSpec["containers"].([]any)
-	if len(containers) != 1 {
-		t.Fatalf("deployment runs %d containers, want one", len(containers))
-	}
-	mounts, _ := containers[0].(map[string]any)["volumeMounts"].([]any)
+	podSpec := deploymentPodSpec(t, manifests)
+	mounts, _ := webContainer(t, manifests)["volumeMounts"].([]any)
 
 	var volumeName string
 	for _, value := range mounts {
@@ -364,6 +374,108 @@ func TestConfigMountIsReadOnly(t *testing.T) {
 		return
 	}
 	t.Fatalf("deployment has no volume named %s", volumeName)
+}
+
+type secretFile struct {
+	mountPath string
+	itemPath  string
+	key       string
+}
+
+func TestSecretMounts(t *testing.T) {
+	assertSecretMounts(t, renderChart(t), "invoicer-oidc", "client-secret", "cookie-key")
+}
+
+func TestSecretMountsUseValues(t *testing.T) {
+	manifests := renderChart(t,
+		"--set", "access.secretName=example-oidc",
+		"--set", "access.clientSecretKey=oidc-secret",
+		"--set", "access.cookieKeyKey=session-key",
+	)
+	assertSecretMounts(t, manifests, "example-oidc", "oidc-secret", "session-key")
+}
+
+func assertSecretMounts(t *testing.T, manifests []map[string]any, secretName, clientSecretKey, cookieKey string) {
+	t.Helper()
+	podSpec := deploymentPodSpec(t, manifests)
+	container := webContainer(t, manifests)
+
+	assertSecretFile(t, podSpec, container, secretName, secretFile{
+		mountPath: "/run/secrets/oidc-client-secret",
+		itemPath:  "oidc-client-secret",
+		key:       clientSecretKey,
+	})
+	assertSecretFile(t, podSpec, container, secretName, secretFile{
+		mountPath: "/run/secrets/cookie-key",
+		itemPath:  "cookie-key",
+		key:       cookieKey,
+	})
+}
+
+func assertSecretFile(t *testing.T, podSpec, container map[string]any, secretName string, file secretFile) {
+	t.Helper()
+	mounts, _ := container["volumeMounts"].([]any)
+
+	var volumeName string
+	for _, value := range mounts {
+		mount := value.(map[string]any)
+		if mount["mountPath"] != file.mountPath {
+			continue
+		}
+		if mount["readOnly"] != true {
+			t.Fatalf("%s is not mounted read-only", file.mountPath)
+		}
+		volumeName, _ = mount["name"].(string)
+	}
+	if volumeName == "" {
+		t.Fatalf("deployment mounts no secret at %s", file.mountPath)
+	}
+
+	volumes, _ := podSpec["volumes"].([]any)
+	for _, value := range volumes {
+		volume := value.(map[string]any)
+		if volume["name"] != volumeName {
+			continue
+		}
+		secret, _ := volume["secret"].(map[string]any)
+		if secret["secretName"] != secretName {
+			t.Fatalf("volume %s reads secret %v, want %s", volumeName, secret["secretName"], secretName)
+		}
+		items, _ := secret["items"].([]any)
+		for _, value := range items {
+			item := value.(map[string]any)
+			if item["key"] == file.key && item["path"] == file.itemPath {
+				return
+			}
+		}
+		t.Fatalf("volume %s does not mount key %s at %s", volumeName, file.key, file.itemPath)
+	}
+	t.Fatalf("deployment has no volume named %s", volumeName)
+}
+
+func TestChartRendersNoSecretValues(t *testing.T) {
+	const value = "secret-value-that-must-not-render"
+	manifests := renderChart(t,
+		"--set", "access.clientSecret="+value,
+		"--set", "access.cookieKey="+value,
+	)
+
+	for _, manifest := range manifests {
+		if manifest["kind"] == "Secret" {
+			t.Fatal("chart renders a Secret instead of mounting the existing one")
+		}
+		rendered, err := yaml.Marshal(manifest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(rendered), value) {
+			t.Fatalf("%s renders a secret value", manifest["kind"])
+		}
+	}
+
+	cfg := decodeRenderedConfig(t, configFile(t, manifests))
+	equal(t, "oidc.clientSecretFile", cfg.OIDC.ClientSecretFile, "/run/secrets/oidc-client-secret")
+	equal(t, "oidc.cookieKeyFile", cfg.OIDC.CookieKeyFile, "/run/secrets/cookie-key")
 }
 
 func TestHelmLintAndTemplate(t *testing.T) {

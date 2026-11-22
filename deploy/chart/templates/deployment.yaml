@@ -25,8 +25,25 @@ spec:
               mountPath: /home/invoicer/.invoicer/config.yaml
               subPath: config.yaml
               readOnly: true
+            - name: oidc-secrets
+              mountPath: /run/secrets/oidc-client-secret
+              subPath: oidc-client-secret
+              readOnly: true
+            - name: oidc-secrets
+              mountPath: /run/secrets/cookie-key
+              subPath: cookie-key
+              readOnly: true
       volumes:
         - name: config
           configMap:
             name: {{ include "invoicer.fullname" . }}-config
             defaultMode: 0444
+        - name: oidc-secrets
+          secret:
+            secretName: {{ .Values.access.secretName }}
+            defaultMode: 0444
+            items:
+              - key: {{ .Values.access.clientSecretKey }}
+                path: oidc-client-secret
+              - key: {{ .Values.access.cookieKeyKey }}
+                path: cookie-key
