@@ -136,7 +136,7 @@ invoicer web [options]
 | `--address` | Address the server listens on. Defaults to `:8080`. |
 | `--database` | Path to the invoice database. Defaults to the config value, then `~/.invoicer/invoices.db`. |
 
-The server serves pages and the stylesheet from the binary, so it needs no support files. An interrupt stops the server gracefully.
+The server serves pages and the stylesheet from the binary, so it needs no support files. An interrupt stops the server gracefully. Without access settings in the config, the app starts without sign-in for local development.
 
 ```bash
 # Serve the default database at http://localhost:8080/

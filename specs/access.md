@@ -200,6 +200,13 @@ The callback address SHALL be `baseUrl` plus `/callback`.
 
 Startup SHALL fail with an error when a required setting is missing or invalid.
 
+A config with no `baseUrl` and no `oidc` section SHALL start the app without sign-in. This mode supports local development.
+
+#### Scenario: No access settings
+- GIVEN a config without `baseUrl` and `oidc`
+- WHEN `invoicer web` starts
+- THEN the app serves pages without sign-in
+
 #### Scenario: Missing client ID
 - GIVEN a config without `oidc.clientId`
 - WHEN `invoicer web` starts

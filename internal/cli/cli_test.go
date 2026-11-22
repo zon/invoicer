@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -87,13 +89,57 @@ func writeAccessFiles(t *testing.T) (secretPath, keyPath string) {
 // accessYAML returns a valid web access configuration that names the given
 // secret files.
 func accessYAML(secretPath, keyPath string) string {
+	return accessYAMLWithIssuer("https://auth.example.com", secretPath, keyPath)
+}
+
+// accessYAMLWithIssuer returns a valid web access configuration for an issuer.
+func accessYAMLWithIssuer(issuer, secretPath, keyPath string) string {
 	return fmt.Sprintf(`baseUrl: https://invoices.example.com
 oidc:
-  issuer: https://auth.example.com
+  issuer: %s
   clientId: invoicer
   clientSecretFile: %s
   cookieKeyFile: %s
-`, secretPath, keyPath)
+`, issuer, secretPath, keyPath)
+}
+
+// discoveryStub is a local OpenID Connect provider that publishes a discovery
+// document. Tests change metadata to omit an endpoint.
+type discoveryStub struct {
+	server   *httptest.Server
+	metadata map[string]any
+	requests atomic.Int32
+}
+
+func newDiscoveryStub(t *testing.T) *discoveryStub {
+	t.Helper()
+	stub := &discoveryStub{}
+	stub.server = httptest.NewServer(http.HandlerFunc(stub.discovery))
+	t.Cleanup(stub.server.Close)
+	return stub
+}
+
+func (s *discoveryStub) discovery(w http.ResponseWriter, r *http.Request) {
+	s.requests.Add(1)
+
+	metadata := map[string]any{
+		"issuer":                 s.server.URL,
+		"authorization_endpoint": s.server.URL + "/authorize",
+		"token_endpoint":         s.server.URL + "/token",
+		"jwks_uri":               s.server.URL + "/keys",
+	}
+	for key, value := range s.metadata {
+		if value == "" {
+			delete(metadata, key)
+			continue
+		}
+		metadata[key] = value
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(metadata); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func TestResolveOptions_NoConfig(t *testing.T) {
@@ -424,6 +470,17 @@ func TestWebResolveOptions_Defaults(t *testing.T) {
 	}
 }
 
+func TestWebResolveOptions_NoAccessSettings(t *testing.T) {
+	path := writeTestConfig(t, "database: /var/lib/invoicer/config.db\n")
+	opts, err := (&WebCmd{}).resolveOptions(path)
+	if err != nil {
+		t.Fatalf("resolveOptions: %v", err)
+	}
+	if opts.Access != nil {
+		t.Errorf("Access: got %+v, want nil", opts.Access)
+	}
+}
+
 func TestWebResolveOptions_AccessSettings(t *testing.T) {
 	secretPath, keyPath := writeAccessFiles(t)
 	path := writeTestConfig(t, accessYAML(secretPath, keyPath)+`  adminGroup: admins
@@ -630,7 +687,8 @@ func TestWebRunServesInvoicesFromResolvedDatabase(t *testing.T) {
 	}
 
 	secretPath, keyPath := writeAccessFiles(t)
-	configPath := writeTestConfig(t, "database: "+dbPath+"\n"+accessYAML(secretPath, keyPath))
+	stub := newDiscoveryStub(t)
+	configPath := writeTestConfig(t, "database: "+dbPath+"\n"+accessYAMLWithIssuer(stub.server.URL, secretPath, keyPath))
 	cmd := &WebCmd{Address: "127.0.0.1:9000"}
 
 	if err := cmd.run(configPath, io.Discard); err != nil {
@@ -663,7 +721,8 @@ func TestWebRunReportsReadyURL(t *testing.T) {
 		t.Run(tc.address, func(t *testing.T) {
 			dbPath := filepath.Join(t.TempDir(), "invoices.db")
 			secretPath, keyPath := writeAccessFiles(t)
-			configPath := writeTestConfig(t, "database: "+dbPath+"\n"+accessYAML(secretPath, keyPath))
+			stub := newDiscoveryStub(t)
+			configPath := writeTestConfig(t, "database: "+dbPath+"\n"+accessYAMLWithIssuer(stub.server.URL, secretPath, keyPath))
 
 			var out bytes.Buffer
 			if err := (&WebCmd{Address: tc.address}).run(configPath, &out); err != nil {
@@ -673,6 +732,25 @@ func TestWebRunReportsReadyURL(t *testing.T) {
 				t.Errorf("output: got %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestWebRunStartsWithoutAccessSettings(t *testing.T) {
+	original := listenAndServe
+	defer func() { listenAndServe = original }()
+
+	started := false
+	listenAndServe = func(*http.Server) error {
+		started = true
+		return nil
+	}
+
+	configPath := writeTestConfig(t, "database: "+filepath.Join(t.TempDir(), "invoices.db")+"\n")
+	if err := (&WebCmd{}).run(configPath, io.Discard); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !started {
+		t.Error("server did not start without access settings")
 	}
 }
 
@@ -702,10 +780,106 @@ func TestWebRunReportsInvalidAccessSettings(t *testing.T) {
 	}
 }
 
+func TestWebRunDiscoversProviderAtStartup(t *testing.T) {
+	original := listenAndServe
+	defer func() { listenAndServe = original }()
+
+	started := false
+	listenAndServe = func(*http.Server) error {
+		started = true
+		return nil
+	}
+
+	stub := newDiscoveryStub(t)
+	secretPath, keyPath := writeAccessFiles(t)
+	configPath := writeTestConfig(t, "database: "+filepath.Join(t.TempDir(), "invoices.db")+"\n"+accessYAMLWithIssuer(stub.server.URL, secretPath, keyPath))
+
+	if err := (&WebCmd{}).run(configPath, io.Discard); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !started {
+		t.Error("server did not start after discovery")
+	}
+	if got := stub.requests.Load(); got != 1 {
+		t.Errorf("discovery requests: got %d, want 1", got)
+	}
+}
+
+func TestWebRunReportsUnreachableIssuer(t *testing.T) {
+	original := listenAndServe
+	defer func() { listenAndServe = original }()
+
+	started := false
+	listenAndServe = func(*http.Server) error {
+		started = true
+		return nil
+	}
+
+	stub := newDiscoveryStub(t)
+	issuer := stub.server.URL
+	stub.server.Close()
+
+	secretPath, keyPath := writeAccessFiles(t)
+	configPath := writeTestConfig(t, "database: "+filepath.Join(t.TempDir(), "invoices.db")+"\n"+accessYAMLWithIssuer(issuer, secretPath, keyPath))
+
+	err := (&WebCmd{}).run(configPath, io.Discard)
+	if err == nil {
+		t.Fatal("run did not report the unreachable issuer")
+	}
+	if !strings.Contains(err.Error(), "discovering OIDC provider") {
+		t.Errorf("error does not report provider discovery: %v", err)
+	}
+	if started {
+		t.Error("server started without discovering the provider")
+	}
+}
+
+func TestWebRunReportsMissingDiscoveryEndpoints(t *testing.T) {
+	cases := []struct {
+		endpoint string
+		want     string
+	}{
+		{"authorization_endpoint", "authorization endpoint"},
+		{"token_endpoint", "token endpoint"},
+		{"jwks_uri", "JWKS endpoint"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.endpoint, func(t *testing.T) {
+			original := listenAndServe
+			defer func() { listenAndServe = original }()
+
+			started := false
+			listenAndServe = func(*http.Server) error {
+				started = true
+				return nil
+			}
+
+			stub := newDiscoveryStub(t)
+			stub.metadata = map[string]any{tc.endpoint: ""}
+
+			secretPath, keyPath := writeAccessFiles(t)
+			configPath := writeTestConfig(t, "database: "+filepath.Join(t.TempDir(), "invoices.db")+"\n"+accessYAMLWithIssuer(stub.server.URL, secretPath, keyPath))
+
+			err := (&WebCmd{}).run(configPath, io.Discard)
+			if err == nil {
+				t.Fatalf("run did not report the missing %s", tc.endpoint)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error: got %q, want it to contain %q", err, tc.want)
+			}
+			if started {
+				t.Error("server started with an incomplete discovery document")
+			}
+		})
+	}
+}
+
 func TestWebRunStopsOnInterrupt(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "invoices.db")
 	secretPath, keyPath := writeAccessFiles(t)
-	configPath := writeTestConfig(t, "database: "+dbPath+"\n"+accessYAML(secretPath, keyPath))
+	stub := newDiscoveryStub(t)
+	configPath := writeTestConfig(t, "database: "+dbPath+"\n"+accessYAMLWithIssuer(stub.server.URL, secretPath, keyPath))
 
 	originalListen := listenAndServe
 	defer func() { listenAndServe = originalListen }()
@@ -765,7 +939,8 @@ func TestWebRunReportsDatabaseOpenError(t *testing.T) {
 	}
 
 	secretPath, keyPath := writeAccessFiles(t)
-	configPath := writeTestConfig(t, accessYAML(secretPath, keyPath))
+	stub := newDiscoveryStub(t)
+	configPath := writeTestConfig(t, accessYAMLWithIssuer(stub.server.URL, secretPath, keyPath))
 	err := (&WebCmd{Database: filepath.Join(notADirectory, "invoices.db")}).run(configPath, io.Discard)
 
 	if err == nil {
@@ -788,7 +963,8 @@ func TestWebRunReportsUnavailableAddress(t *testing.T) {
 
 	dbPath := filepath.Join(t.TempDir(), "invoices.db")
 	secretPath, keyPath := writeAccessFiles(t)
-	configPath := writeTestConfig(t, accessYAML(secretPath, keyPath))
+	stub := newDiscoveryStub(t)
+	configPath := writeTestConfig(t, accessYAMLWithIssuer(stub.server.URL, secretPath, keyPath))
 
 	done := make(chan error, 1)
 	go func() {
