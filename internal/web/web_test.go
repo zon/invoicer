@@ -165,6 +165,12 @@ func TestSelectingInvoiceShowsDetailBesideTheList(t *testing.T) {
 	}
 
 	body := recorder.Body.String()
+	if !strings.HasPrefix(body, "<!doctype html>") {
+		t.Error("body is not a complete page")
+	}
+	if !strings.Contains(body, "</html>") {
+		t.Error("body does not close the page document")
+	}
 	for _, want := range []string{
 		`id="detail"`,
 		"Jane Smith", "Acme Corp", "Website Redesign", "October", "2027", "$100.00",
@@ -174,6 +180,31 @@ func TestSelectingInvoiceShowsDetailBesideTheList(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
 		}
+	}
+}
+
+func TestDetailReturnsNotFound(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Rate:     100,
+	}
+
+	for _, path := range []string{
+		"/2026/oct",
+		"/2027/sep",
+		"/2027/foo",
+		"/2027/13",
+		"/not-a-year/oct",
+	} {
+		t.Run(path, func(t *testing.T) {
+			recorder := get(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, path)
+
+			if recorder.Code != http.StatusNotFound {
+				t.Errorf("status: got %d, want %d", recorder.Code, http.StatusNotFound)
+			}
+		})
 	}
 }
 
