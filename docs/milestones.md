@@ -2,10 +2,6 @@
 
 High level objectives. Work through them in order. See [process](zpecs/process.md).
 
-## Invoice web app
-
-A web app lists invoices from the database and renders a selected invoice from its stored data. The list shows the customer, month, project, and total. The app has no login in this milestone.
-
 ## OIDC access control
 
 The web app signs users in with OIDC. Users in the admin group read every invoice. Client users read the customer's invoices. The web app rejects requests without a valid session. With one customer, the app needs no group-to-customer mapping.
