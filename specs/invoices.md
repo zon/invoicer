@@ -45,6 +45,12 @@ A year and month SHALL identify an invoice. The database SHALL hold at most one 
 - AND the stored project changes
 - AND the identifier stays the same
 
+#### Scenario: Opening a database with duplicate months
+- GIVEN a database holding several invoices for one year and month
+- WHEN the store opens the database
+- THEN the most recently created invoice remains for that month
+- AND the other invoices and their weeks are removed
+
 ### Requirement: Invoice Amount
 An invoice total SHALL be the sum of each week's hours multiplied by the invoice's hourly rate. The system SHALL compute the total from stored data and SHALL NOT store it.
 

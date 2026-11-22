@@ -121,7 +121,30 @@ $ invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 175 --hours 40
 Edited invoice for October 2026: 2f8c1a9b5d3e4f6a7c8b9d0e1f2a3b4c
 ```
 
-A different project changes the stored invoice's project.
+Changing the customer or project replaces the stored values and keeps the identifier.
+
+## Web App
+
+`invoicer web` starts a read-only web app for the stored invoices. It lists invoices at `/` and shows each invoice as a full page with a link back to the list.
+
+```
+invoicer web [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--address` | Address the server listens on. Defaults to `:8080`. |
+| `--database` | Path to the invoice database. Defaults to the config value, then `~/.invoicer/invoices.db`. |
+
+The server serves pages and the stylesheet from the binary, so it needs no support files. An interrupt stops the server gracefully.
+
+```bash
+# Serve the default database at http://localhost:8080/
+invoicer web
+
+# Serve a different database on another address
+invoicer web --address 127.0.0.1:9000 --database ./work.db
+```
 
 ## Database
 
@@ -131,7 +154,15 @@ The database path comes from `--database`, then the config file, then the defaul
 
 ```bash
 just build   # Build the binary to bin/invoicer
+just dev     # Rebuild and restart the web app on changes
 just install # Build and install to $GOPATH/bin
 just test    # Run all tests
 just         # List available recipes
+```
+
+`just dev` runs the web app through [air](https://github.com/air-verse/air), installed with `go install github.com/air-verse/air@latest`. It uses the address and database `invoicer web` would use. Because the templates and stylesheet are embedded, air watches `html` and `css` files as well as Go files, so an edit to `internal/web/templates` reloads too. Extra arguments are passed to the app:
+
+```bash
+# Reload the web app on another port with a scratch database
+just dev -- --address 127.0.0.1:9000 --database ./tmp/scratch.db
 ```

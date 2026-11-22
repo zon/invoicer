@@ -38,6 +38,9 @@ type Week struct {
 	Hours     float64
 }
 
+// ErrNotFound reports that the store holds no invoice matching a lookup.
+var ErrNotFound = errors.New("invoice not found")
+
 // Store reads and writes invoices in a SQLite database.
 type Store struct {
 	db *gorm.DB
@@ -65,6 +68,9 @@ func Open(path string) (*Store, error) {
 	if err := db.AutoMigrate(&Invoice{}, &Week{}); err != nil {
 		return nil, fmt.Errorf("migrating database: %w", err)
 	}
+	if err := ensureOneInvoicePerMonth(db); err != nil {
+		return nil, fmt.Errorf("enforcing one invoice per month: %w", err)
+	}
 
 	return &Store{db: db}, nil
 }
@@ -78,10 +84,51 @@ func (s *Store) Close() error {
 	return db.Close()
 }
 
+const monthIndex = "idx_invoices_year_month"
+
+// ensureOneInvoicePerMonth keeps the most recently created invoice for each
+// year and month, removes the other invoices and their weeks, and constrains
+// the table so a month holds one invoice.
+func ensureOneInvoicePerMonth(db *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := removeDuplicateInvoices(tx); err != nil {
+			return err
+		}
+		return createMonthIndex(tx)
+	})
+}
+
+func removeDuplicateInvoices(tx *gorm.DB) error {
+	invoices := tx.Config.NamingStrategy.TableName("Invoice")
+	weeks := tx.Config.NamingStrategy.TableName("Week")
+	duplicates := fmt.Sprintf(
+		"SELECT id FROM %s WHERE rowid NOT IN (SELECT MAX(rowid) FROM %s GROUP BY year, month)",
+		invoices,
+		invoices,
+	)
+
+	if err := tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE invoice_id IN (%s)", weeks, duplicates)).Error; err != nil {
+		return fmt.Errorf("removing duplicate invoice weeks: %w", err)
+	}
+	if err := tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE id IN (%s)", invoices, duplicates)).Error; err != nil {
+		return fmt.Errorf("removing duplicate invoices: %w", err)
+	}
+	return nil
+}
+
+func createMonthIndex(tx *gorm.DB) error {
+	invoices := tx.Config.NamingStrategy.TableName("Invoice")
+	statement := fmt.Sprintf("CREATE UNIQUE INDEX IF NOT EXISTS %s ON %s (year, month)", monthIndex, invoices)
+	if err := tx.Exec(statement).Error; err != nil {
+		return fmt.Errorf("creating monthly invoice index: %w", err)
+	}
+	return nil
+}
+
 // Save stores an invoice and its weekly line items and returns the invoice
-// identifier and whether the invoice was newly created. Saving the same
-// customer, year, month, and project again replaces the stored invoice and
-// keeps its identifier.
+// identifier and whether the invoice was newly created. Saving an invoice for
+// an existing year and month replaces the stored invoice, including its
+// customer and project, and keeps its identifier.
 func (s *Store) Save(inv *invoice.Invoice) (string, bool, error) {
 	var id string
 	created := false
@@ -89,10 +136,7 @@ func (s *Store) Save(inv *invoice.Invoice) (string, bool, error) {
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var existing Invoice
 		err := tx.
-			Where(
-				"customer = ? AND year = ? AND month = ? AND project = ?",
-				inv.Customer, inv.Year, int(inv.Month), inv.Project,
-			).
+			Where("year = ? AND month = ?", inv.Year, int(inv.Month)).
 			First(&existing).
 			Error
 
@@ -190,7 +234,53 @@ func (s *Store) Get(id string) (*invoice.Invoice, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading invoice %q: %w", id, err)
 	}
+	return toInvoice(&record), nil
+}
 
+// List returns every stored invoice, newest first by year and month, with its
+// weekly line items.
+func (s *Store) List() ([]*invoice.Invoice, error) {
+	var records []Invoice
+	err := s.db.
+		Preload("Weeks", func(db *gorm.DB) *gorm.DB {
+			return db.Order("start")
+		}).
+		Order("year DESC").
+		Order("month DESC").
+		Find(&records).
+		Error
+	if err != nil {
+		return nil, fmt.Errorf("listing invoices: %w", err)
+	}
+
+	invoices := make([]*invoice.Invoice, 0, len(records))
+	for i := range records {
+		invoices = append(invoices, toInvoice(&records[i]))
+	}
+	return invoices, nil
+}
+
+// GetByMonth returns the invoice for the given year and month. It reports
+// ErrNotFound when that month holds no invoice.
+func (s *Store) GetByMonth(year int, month time.Month) (*invoice.Invoice, error) {
+	var record Invoice
+	err := s.db.
+		Preload("Weeks", func(db *gorm.DB) *gorm.DB {
+			return db.Order("start")
+		}).
+		Where("year = ? AND month = ?", year, int(month)).
+		First(&record).
+		Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("%w for %s %d", ErrNotFound, month, year)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("loading invoice for %s %d: %w", month, year, err)
+	}
+	return toInvoice(&record), nil
+}
+
+func toInvoice(record *Invoice) *invoice.Invoice {
 	inv := &invoice.Invoice{
 		Month:    time.Month(record.Month),
 		Year:     record.Year,
@@ -207,7 +297,7 @@ func (s *Store) Get(id string) (*invoice.Invoice, error) {
 			Hours: w.Hours,
 		})
 	}
-	return inv, nil
+	return inv
 }
 
 func newID() (string, error) {

@@ -6,7 +6,7 @@ The web app lists invoices from the invoice database and renders a selected invo
 ## Requirements
 
 ### Requirement: Invoice List
-The app SHALL serve the invoice list at `/`. The list SHALL show every stored invoice with its customer, month and year, project when set, and total. It SHALL order invoices newest first by year and month. Each invoice SHALL link to its detail.
+The app SHALL serve the invoice list at `/`. The list SHALL show every stored invoice with its customer, month and year, project when set, and total. It SHALL order invoices newest first by year and month. Each invoice SHALL link to its detail page.
 
 The total SHALL follow [Invoice Amount](invoices.md#requirement-invoice-amount).
 
@@ -28,15 +28,20 @@ The total SHALL follow [Invoice Amount](invoices.md#requirement-invoice-amount).
 ### Requirement: Invoice Detail
 The detail address SHALL use the year and three-letter lowercase month name, like `/2027/oct`. The detail SHALL show vendor, customer, project when set, month, year, hourly rate, every weekly line item, and total. Each weekly line item SHALL show its date range and hours.
 
-The list and the selected detail SHALL share one page. The list SHALL stay visible and the detail SHALL render in a panel beside it. A direct request SHALL return the complete page with that invoice selected.
+The detail SHALL be a full page. It SHALL show only the invoice and SHALL link back to the invoice list.
 
 #### Scenario: Direct detail request
 - GIVEN a stored invoice for October 2027
 - WHEN `/2027/oct` is requested
-- THEN the response is the complete page
-- AND the list stays visible
-- AND the October 2027 invoice is selected in the detail panel
+- THEN the response is a complete page showing that invoice
+- AND the page shows no other invoice
+- AND the page links back to the invoice list
 - AND the detail shows vendor, customer, project, month, year, rate, each week's date range and hours, and total
+
+#### Scenario: Returning to the list
+- GIVEN the detail page for October 2027 is open
+- WHEN the user follows the link back to the list
+- THEN the invoice list opens
 
 #### Scenario: Detail for an invoice without a project
 - GIVEN a stored invoice with no project
@@ -56,34 +61,13 @@ The app SHALL return 404 for an unknown year, an unknown month, or a month with 
 - WHEN the app handles the request
 - THEN the app returns 404
 
-### Requirement: Partial Updates
-A request with `HX-Request: true` SHALL return only the detail panel fragment. The fragment SHALL be a complete HTML element rather than a document. The app SHALL return HTML for every response and SHALL NOT expose a JSON API.
+### Requirement: HTML Pages
+The app SHALL return a complete HTML page for every response and SHALL NOT expose a JSON API.
 
-Selecting an invoice with htmx SHALL load the detail fragment into the panel and update the browser address. A missing invoice in a partial request SHALL return a not found fragment with status 404.
-
-#### Scenario: Invoice selection updates the panel
-- GIVEN the list page is open in a browser with htmx
-- WHEN the user selects an invoice
-- THEN the panel shows that invoice's detail
-- AND the list stays unchanged
-- AND the browser address changes to the invoice detail address
-
-#### Scenario: Partial request
+#### Scenario: Pages are HTML
 - GIVEN a stored invoice
-- WHEN its detail address is requested with `HX-Request: true`
-- THEN the response is one HTML element containing the detail
-- AND the response contains no page document
-
-#### Scenario: Missing invoice partial
-- GIVEN no stored invoice for a requested month
-- WHEN the detail address is requested with `HX-Request: true`
-- THEN the response is a not found fragment
-- AND the status is 404
-
-#### Scenario: Selection without htmx
-- GIVEN the list page is open in a browser without htmx
-- WHEN the user selects an invoice
-- THEN the browser opens the complete page at the invoice detail address
+- WHEN `/` or its detail address is requested
+- THEN the response is a complete HTML page
 
 ### Requirement: Escaping
 The app SHALL escape stored values in every response. It SHALL never render an invoice field as raw HTML.
@@ -105,7 +89,9 @@ The app SHALL allow every request to read every invoice. It SHALL NOT require si
 ### Requirement: Web Command
 `invoicer web` SHALL start the web server. The database path SHALL come from `--database`, then the `database` config value, then the default, as [Database Location](config.md#requirement-database-location) describes. `--address` SHALL set the listen address and SHALL default to `:8080`.
 
-The server SHALL serve pages, fragments, the stylesheet, and htmx from the binary. It SHALL need no support files beside the binary.
+The server SHALL serve pages and the stylesheet from the binary. It SHALL need no support files beside the binary.
+
+When the server starts, the command SHALL print one line that gives the app's local URL as a link. It SHALL NOT print request logs, route lists, or framework diagnostics.
 
 The command SHALL report an error and exit non-zero when the database cannot open or the address cannot be used.
 
@@ -115,11 +101,13 @@ An interrupt SHALL stop the server gracefully.
 - GIVEN no address is passed
 - WHEN `invoicer web` starts
 - THEN the server listens on `:8080`
+- AND the command prints `invoicer web ready at http://localhost:8080/`
 
 #### Scenario: Custom address
 - GIVEN `--address 127.0.0.1:9000`
 - WHEN the server starts
 - THEN it listens on `127.0.0.1:9000`
+- AND the command prints `invoicer web ready at http://127.0.0.1:9000/`
 
 #### Scenario: Database flag wins
 - GIVEN a config database path
