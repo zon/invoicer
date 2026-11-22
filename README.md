@@ -186,6 +186,52 @@ The session does not renew. A missing, expired, or invalid session goes to `/log
 
 The database path comes from `--database`, then the config file, then the default of `~/.invoicer/invoices.db`. Invoicer creates the database file and its parent directory on first use, then migrates the schema.
 
+## Deployment
+
+The repository holds a container image and a Helm chart under `deploy`.
+
+### Container Image
+
+The image runs `invoicer` as its entrypoint and passes arguments through. `web` serves the web app and no subcommand generates an invoice. The image holds no config, database, or secret.
+
+Build the image with Podman from the repository root:
+
+```bash
+podman build -t ghcr.io/zon/invoicer:0.1.0 -f deploy/container/Containerfile .
+```
+
+Push the image to a registry the cluster can reach:
+
+```bash
+podman push ghcr.io/zon/invoicer:0.1.0
+```
+
+### Helm Chart
+
+The chart uses `ghcr.io/zon/invoicer` with the chart app version as the default tag. Override `image.repository` and `image.tag` to deploy another image.
+
+The chart installs into an existing `invoicer` namespace and does not create it. Create the namespace and the OIDC Secret first:
+
+```bash
+kubectl create namespace invoicer
+kubectl -n invoicer create secret generic invoicer-oidc \
+  --from-file=client-secret=./client-secret \
+  --from-file=cookie-key=./cookie-key
+```
+
+The default keys are `client-secret` and `cookie-key`. `access.clientSecretKey` and `access.cookieKeyKey` name other keys.
+
+Then install the chart:
+
+```bash
+helm install invoicer deploy/chart --namespace invoicer \
+  --set hostname=invoices.example.com \
+  --set publicURL=https://invoices.example.com \
+  --set access.issuer=https://id.example.com
+```
+
+Set `hostname` and `publicURL` to the public address and `access` to the OIDC provider. The defaults live in `deploy/chart/values.yaml`. The chart creates the web Deployment, Service, claim, Ingress, and Certificate. Set `cli.enabled` and `cli.args` to run the CLI against the same database.
+
 ## Development
 
 ```bash
