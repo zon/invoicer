@@ -18,6 +18,12 @@ spec:
       labels:
         {{- include "invoicer.selectorLabels" . | nindent 8 }}
     spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . | quote }}
+        {{- end }}
+      {{- end }}
       securityContext:
         runAsUser: 1000
         runAsGroup: 1000

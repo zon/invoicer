@@ -620,6 +620,67 @@ func TestWebPodSecurityContext(t *testing.T) {
 	equal(t, "readOnlyRootFilesystem", containerSecurity["readOnlyRootFilesystem"], true)
 }
 
+func appVersion(t *testing.T) string {
+	t.Helper()
+	var chart chartMetadata
+	decode(t, filepath.Join(chartDir(t), "Chart.yaml"), &chart)
+	return chart.AppVersion
+}
+
+func containerImage(t *testing.T, container map[string]any) string {
+	t.Helper()
+	image, ok := container["image"].(string)
+	if !ok {
+		t.Fatalf("container has no image")
+	}
+	return image
+}
+
+func TestImageDefaultsToChartAppVersion(t *testing.T) {
+	manifests := renderChart(t, "--set", "cli.enabled=true")
+	want := "ghcr.io/zon/invoicer:" + appVersion(t)
+
+	equal(t, "web image", containerImage(t, webContainer(t, manifests)), want)
+	equal(t, "cli image", containerImage(t, jobContainer(t, manifests)), want)
+}
+
+func TestImageUsesTagValue(t *testing.T) {
+	manifests := renderChart(t, "--set", "image.tag=v1.2.3", "--set", "cli.enabled=true")
+
+	equal(t, "web image", containerImage(t, webContainer(t, manifests)), "ghcr.io/zon/invoicer:v1.2.3")
+	equal(t, "cli image", containerImage(t, jobContainer(t, manifests)), "ghcr.io/zon/invoicer:v1.2.3")
+}
+
+func pullSecretNames(t *testing.T, podSpec map[string]any) []any {
+	t.Helper()
+	secrets, _ := podSpec["imagePullSecrets"].([]any)
+
+	var names []any
+	for _, value := range secrets {
+		name, _ := value.(map[string]any)["name"]
+		names = append(names, name)
+	}
+	return names
+}
+
+func TestImagePullSecrets(t *testing.T) {
+	manifests := renderChart(t,
+		"--set", "image.pullSecrets={registry-a,registry-b}",
+		"--set", "cli.enabled=true",
+	)
+	want := []any{"registry-a", "registry-b"}
+
+	equalsAny(t, "web imagePullSecrets", pullSecretNames(t, deploymentPodSpec(t, manifests)), want)
+	equalsAny(t, "cli imagePullSecrets", pullSecretNames(t, jobPodSpec(t, manifests)), want)
+}
+
+func TestNoImagePullSecretsByDefault(t *testing.T) {
+	manifests := renderChart(t, "--set", "cli.enabled=true")
+
+	equalsAny(t, "web imagePullSecrets", pullSecretNames(t, deploymentPodSpec(t, manifests)), nil)
+	equalsAny(t, "cli imagePullSecrets", pullSecretNames(t, jobPodSpec(t, manifests)), nil)
+}
+
 func TestDeploymentRestartsWhenConfigChanges(t *testing.T) {
 	annotations := func(manifests []map[string]any) map[string]any {
 		t.Helper()

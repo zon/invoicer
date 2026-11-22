@@ -13,6 +13,12 @@ spec:
       labels:
         app.kubernetes.io/component: cli
     spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . | quote }}
+        {{- end }}
+      {{- end }}
       restartPolicy: Never
       securityContext:
         runAsUser: 1000
