@@ -33,10 +33,23 @@ func (f *fakeStore) GetByMonth(year int, month time.Month) (*invoice.Invoice, er
 
 func get(t *testing.T, s web.Store, path string) *httptest.ResponseRecorder {
 	t.Helper()
+	return request(t, s, path, nil)
+}
+
+func request(t *testing.T, s web.Store, path string, headers map[string]string) *httptest.ResponseRecorder {
+	t.Helper()
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, path, nil)
-	web.New(s).ServeHTTP(recorder, request)
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+	web.New(s).ServeHTTP(recorder, req)
 	return recorder
+}
+
+func getPartial(t *testing.T, s web.Store, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	return request(t, s, path, map[string]string{"HX-Request": "true"})
 }
 
 func TestListShowsEveryInvoiceNewestFirst(t *testing.T) {
@@ -205,6 +218,118 @@ func TestDetailReturnsNotFound(t *testing.T) {
 				t.Errorf("status: got %d, want %d", recorder.Code, http.StatusNotFound)
 			}
 		})
+	}
+}
+
+func TestPartialRequestReturnsOnlyTheDetailPanel(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Vendor:   "Jane Smith",
+		Customer: "Acme Corp",
+		Project:  "Website Redesign",
+		Rate:     100,
+		Weeks: []invoice.Week{{
+			Start: time.Date(2027, time.October, 4, 0, 0, 0, 0, time.UTC),
+			End:   time.Date(2027, time.October, 10, 0, 0, 0, 0, time.UTC),
+			Hours: 40,
+		}},
+	}
+
+	recorder := getPartial(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, "/2027/oct")
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
+	}
+
+	body := strings.TrimSpace(recorder.Body.String())
+	if !strings.HasPrefix(body, `<aside id="detail">`) {
+		t.Errorf("body is not a detail panel: %q", body)
+	}
+	if !strings.HasSuffix(body, "</aside>") {
+		t.Errorf("body does not end with the detail panel: %q", body)
+	}
+	if strings.Contains(body, "<!doctype") || strings.Contains(body, "<html") {
+		t.Error("body contains a page document")
+	}
+	for _, want := range []string{
+		"Jane Smith", "Acme Corp", "Website Redesign", "October", "2027",
+		"$100.00", "Oct 4-10", "40", "$4000.00",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestPartialRequestReturnsNotFoundFragment(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Rate:     100,
+	}
+
+	for _, path := range []string{"/2026/oct", "/2027/sep", "/2027/foo"} {
+		t.Run(path, func(t *testing.T) {
+			recorder := getPartial(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, path)
+
+			if recorder.Code != http.StatusNotFound {
+				t.Errorf("status: got %d, want %d", recorder.Code, http.StatusNotFound)
+			}
+
+			body := strings.TrimSpace(recorder.Body.String())
+			if !strings.HasPrefix(body, `<aside id="detail">`) {
+				t.Errorf("body is not a detail panel: %q", body)
+			}
+			if !strings.Contains(strings.ToLower(body), "not found") {
+				t.Errorf("body does not report a missing invoice: %q", body)
+			}
+			if strings.Contains(body, "<!doctype") || strings.Contains(body, "<html") {
+				t.Error("body contains a page document")
+			}
+		})
+	}
+}
+
+func TestListLinksSelectInvoicesWithHtmx(t *testing.T) {
+	recorder := get(t, &fakeStore{invoices: []*invoice.Invoice{{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Rate:     100,
+	}}}, "/")
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
+	}
+
+	body := recorder.Body.String()
+	for _, want := range []string{
+		`href="/2027/oct"`,
+		`hx-get="/2027/oct"`,
+		`hx-target="#detail"`,
+		`hx-swap="outerHTML"`,
+		`hx-push-url="true"`,
+		`src="/htmx.min.js"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestServesHtmx(t *testing.T) {
+	recorder := get(t, &fakeStore{}, "/htmx.min.js")
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
+	}
+	if contentType := recorder.Header().Get("Content-Type"); !strings.Contains(contentType, "javascript") {
+		t.Errorf("content type: got %q, want javascript", contentType)
+	}
+	if !strings.Contains(recorder.Body.String(), "htmx") {
+		t.Error("body does not contain htmx")
 	}
 }
 

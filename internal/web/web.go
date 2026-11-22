@@ -21,6 +21,9 @@ import (
 //go:embed templates/*.html
 var templateFiles embed.FS
 
+//go:embed static/htmx.min.js
+var htmxJS []byte
+
 // Store provides the invoices the web app reads.
 type Store interface {
 	List() ([]*invoice.Invoice, error)
@@ -40,6 +43,7 @@ func New(s Store) *Server {
 		store:  s,
 	}
 	server.SetHTMLTemplate(template.Must(template.ParseFS(templateFiles, "templates/*.html")))
+	server.GET("/htmx.min.js", server.htmx)
 	server.GET("/", server.index)
 	server.GET("/:year/:month", server.show)
 	return server
@@ -90,6 +94,10 @@ type weekRow struct {
 	Hours string
 }
 
+func (s *Server) htmx(c *gin.Context) {
+	c.Data(http.StatusOK, "application/javascript; charset=utf-8", htmxJS)
+}
+
 func (s *Server) index(c *gin.Context) {
 	s.render(c, nil)
 }
@@ -97,19 +105,19 @@ func (s *Server) index(c *gin.Context) {
 func (s *Server) show(c *gin.Context) {
 	year, err := strconv.Atoi(c.Param("year"))
 	if err != nil {
-		c.Status(http.StatusNotFound)
+		s.notFound(c)
 		return
 	}
 
 	month, err := invoice.ParseMonth(c.Param("month"))
 	if err != nil {
-		c.Status(http.StatusNotFound)
+		s.notFound(c)
 		return
 	}
 
 	inv, err := s.store.GetByMonth(year, month)
 	if errors.Is(err, store.ErrNotFound) {
-		c.Status(http.StatusNotFound)
+		s.notFound(c)
 		return
 	}
 	if err != nil {
@@ -117,7 +125,19 @@ func (s *Server) show(c *gin.Context) {
 		return
 	}
 
+	if isPartial(c) {
+		s.renderDetail(c, inv)
+		return
+	}
 	s.render(c, inv)
+}
+
+func (s *Server) notFound(c *gin.Context) {
+	if isPartial(c) {
+		c.HTML(http.StatusNotFound, "not-found", pageData{})
+		return
+	}
+	c.Status(http.StatusNotFound)
 }
 
 func (s *Server) render(c *gin.Context, selected *invoice.Invoice) {
@@ -131,6 +151,14 @@ func (s *Server) render(c *gin.Context, selected *invoice.Invoice) {
 		Invoices: rows(invoices),
 		Selected: detail(selected),
 	})
+}
+
+func (s *Server) renderDetail(c *gin.Context, inv *invoice.Invoice) {
+	c.HTML(http.StatusOK, "detail", pageData{Selected: detail(inv)})
+}
+
+func isPartial(c *gin.Context) bool {
+	return strings.EqualFold(c.GetHeader("HX-Request"), "true")
 }
 
 func rows(invoices []*invoice.Invoice) []invoiceRow {

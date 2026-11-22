@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Invoices</title>
+  <script src="/htmx.min.js"></script>
 </head>
 <body>
   <header>
@@ -24,7 +25,7 @@
         <tbody>
           {{range .Invoices}}
           <tr>
-            <td><a href="{{.Path}}">{{.Customer}}</a></td>
+            <td><a href="{{.Path}}" hx-get="{{.Path}}" hx-target="#detail" hx-swap="outerHTML" hx-push-url="true">{{.Customer}}</a></td>
             <td>{{.Month}}</td>
             <td>{{.Year}}</td>
             <td>{{.Project}}</td>
