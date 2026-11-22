@@ -49,6 +49,7 @@ func (f *fakeAccess) Logout(c *gin.Context) {
 type fakeStore struct {
 	invoices []*invoice.Invoice
 	err      error
+	setErr   error
 }
 
 func (f *fakeStore) List() ([]*invoice.Invoice, error) {
@@ -62,6 +63,19 @@ func (f *fakeStore) GetByMonth(year int, month time.Month) (*invoice.Invoice, er
 		}
 	}
 	return nil, store.ErrNotFound
+}
+
+func (f *fakeStore) SetProject(year int, month time.Month, project string) error {
+	if f.setErr != nil {
+		return f.setErr
+	}
+	for _, inv := range f.invoices {
+		if inv.Year == year && inv.Month == month {
+			inv.Project = project
+			return nil
+		}
+	}
+	return store.ErrNotFound
 }
 
 func TestNewDoesNotLogRoutesByDefault(t *testing.T) {
@@ -118,6 +132,24 @@ func getWithAccess(t *testing.T, s web.Store, a web.Access, path string) *httpte
 	t.Helper()
 	recorder := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
+	web.New(s, a).ServeHTTP(recorder, req)
+	return recorder
+}
+
+func post(t *testing.T, s web.Store, path string, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	web.New(s).ServeHTTP(recorder, req)
+	return recorder
+}
+
+func postWithAccess(t *testing.T, s web.Store, a web.Access, path string, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	web.New(s, a).ServeHTTP(recorder, req)
 	return recorder
 }
@@ -580,6 +612,168 @@ func TestDetailShowsProjectForm(t *testing.T) {
 
 	if !strings.Contains(form, "Save") {
 		t.Error("form does not have a Save button")
+	}
+}
+
+func TestPostProjectChangesProject(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Project:  "Website Redesign",
+		Rate:     100,
+		Weeks:    []invoice.Week{{Hours: 10}},
+	}
+	s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+
+	recorder := post(t, s, "/2027/oct", url.Values{"project": {"Mobile App"}})
+	if recorder.Code != http.StatusSeeOther {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusSeeOther)
+	}
+	if location := recorder.Header().Get("Location"); location != "/2027/oct" {
+		t.Errorf("location: got %q, want %q", location, "/2027/oct")
+	}
+	if stored.Project != "Mobile App" {
+		t.Errorf("Project: got %q, want %q", stored.Project, "Mobile App")
+	}
+
+	for _, path := range []string{"/", "/2027/oct"} {
+		body := get(t, s, path).Body.String()
+		if !strings.Contains(body, "Mobile App") {
+			t.Errorf("%s does not show the new project", path)
+		}
+		if strings.Contains(body, "Website Redesign") {
+			t.Errorf("%s still shows the old project", path)
+		}
+	}
+}
+
+func TestPostProjectClearsProject(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Project:  "Website Redesign",
+		Rate:     100,
+	}
+	s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+
+	recorder := post(t, s, "/2027/oct", url.Values{"project": {""}})
+	if recorder.Code != http.StatusSeeOther {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusSeeOther)
+	}
+	if stored.Project != "" {
+		t.Errorf("Project: got %q, want empty", stored.Project)
+	}
+
+	body := get(t, s, "/2027/oct").Body.String()
+	if strings.Contains(body, "<dt>Project</dt>") {
+		t.Error("detail contains a project entry after the project was cleared")
+	}
+	if input := projectInput(t, projectForm(t, body)); !strings.Contains(input, `value=""`) {
+		t.Errorf("project input is not empty: %s", input)
+	}
+}
+
+func TestPostProjectTrimsWhitespace(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Rate:     100,
+	}
+	s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+
+	recorder := post(t, s, "/2027/oct", url.Values{"project": {"  Mobile App  "}})
+	if recorder.Code != http.StatusSeeOther {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusSeeOther)
+	}
+	if stored.Project != "Mobile App" {
+		t.Errorf("Project: got %q, want %q", stored.Project, "Mobile App")
+	}
+}
+
+func TestPostProjectReturnsNotFound(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Project:  "Website Redesign",
+		Rate:     100,
+	}
+
+	for _, path := range []string{
+		"/2026/oct",
+		"/2027/sep",
+		"/2027/foo",
+		"/2027/13",
+		"/not-a-year/oct",
+	} {
+		t.Run(path, func(t *testing.T) {
+			s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+
+			recorder := post(t, s, path, url.Values{"project": {"Mobile App"}})
+
+			if recorder.Code != http.StatusNotFound {
+				t.Errorf("status: got %d, want %d", recorder.Code, http.StatusNotFound)
+			}
+			if stored.Project != "Website Redesign" {
+				t.Errorf("Project: got %q, want %q", stored.Project, "Website Redesign")
+			}
+		})
+	}
+}
+
+func TestPostProjectReportsSaveFailure(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Project:  "Website Redesign",
+		Rate:     100,
+	}
+	s := &fakeStore{
+		invoices: []*invoice.Invoice{stored},
+		setErr:   errors.New("database unavailable"),
+	}
+
+	recorder := post(t, s, "/2027/oct", url.Values{"project": {"Mobile App"}})
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Errorf("status: got %d, want %d", recorder.Code, http.StatusInternalServerError)
+	}
+	if stored.Project != "Website Redesign" {
+		t.Errorf("Project: got %q, want %q", stored.Project, "Website Redesign")
+	}
+}
+
+func TestPostProjectWithoutSessionGoesToLogin(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Project:  "Website Redesign",
+		Rate:     100,
+	}
+	s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+
+	recorder := postWithAccess(t, s, &fakeAccess{}, "/2027/oct", url.Values{"project": {"Mobile App"}})
+
+	if recorder.Code != http.StatusFound {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusFound)
+	}
+	location, err := url.Parse(recorder.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parsing redirect: %v", err)
+	}
+	if location.Path != "/login" {
+		t.Errorf("redirect path: got %q, want %q", location.Path, "/login")
+	}
+	if next := location.Query().Get("next"); next != "/2027/oct" {
+		t.Errorf("return page: got %q, want %q", next, "/2027/oct")
+	}
+	if stored.Project != "Website Redesign" {
+		t.Errorf("Project: got %q, want %q", stored.Project, "Website Redesign")
 	}
 }
 
