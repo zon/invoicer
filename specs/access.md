@@ -217,7 +217,7 @@ Every page shown to a signed-in user SHALL show the user's email and a sign-out 
 The web app SHALL read these settings once at startup from the config file:
 
 ```yaml
-baseUrl: https://invoices.example.com
+baseUrl: https://invoices.haralovich.com
 oidc:
   issuer: https://auth.example.com
   clientId: invoicer

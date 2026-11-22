@@ -52,7 +52,7 @@ The signed-in email and a sign-out link show on every page. Every route except `
 The web app reads its settings from the config file. The app reads the file once at startup:
 
 ```yaml
-baseUrl: https://invoices.example.com
+baseUrl: https://invoices.haralovich.com
 oidc:
   issuer: https://auth.example.com
   clientId: invoicer

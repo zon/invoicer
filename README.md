@@ -153,7 +153,7 @@ invoicer web --address 127.0.0.1:9000 --database ./work.db
 Set `baseUrl` and the `oidc` section in the config file:
 
 ```yaml
-baseUrl: https://invoices.example.com
+baseUrl: https://invoices.haralovich.com
 oidc:
   issuer: https://auth.example.com
   clientId: invoicer
