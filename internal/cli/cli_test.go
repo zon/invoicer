@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -490,5 +491,62 @@ func TestWebRunStopsOnInterrupt(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("server did not stop after the interrupt")
+	}
+}
+
+func TestWebRunReportsDatabaseOpenError(t *testing.T) {
+	original := listenAndServe
+	defer func() { listenAndServe = original }()
+
+	started := false
+	listenAndServe = func(*http.Server) error {
+		started = true
+		return nil
+	}
+
+	notADirectory := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(notADirectory, []byte("file"), 0o600); err != nil {
+		t.Fatalf("writing file: %v", err)
+	}
+
+	configPath := filepath.Join(t.TempDir(), "nonexistent.yaml")
+	err := (&WebCmd{Database: filepath.Join(notADirectory, "invoices.db")}).run(configPath)
+
+	if err == nil {
+		t.Fatal("run did not report the database error")
+	}
+	if !strings.Contains(err.Error(), "opening invoice database") {
+		t.Errorf("error does not report the database: %v", err)
+	}
+	if started {
+		t.Error("server started without opening the database")
+	}
+}
+
+func TestWebRunReportsUnavailableAddress(t *testing.T) {
+	occupied, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listening on a test address: %v", err)
+	}
+	defer occupied.Close()
+
+	dbPath := filepath.Join(t.TempDir(), "invoices.db")
+	configPath := filepath.Join(t.TempDir(), "nonexistent.yaml")
+
+	done := make(chan error, 1)
+	go func() {
+		done <- (&WebCmd{Address: occupied.Addr().String(), Database: dbPath}).run(configPath)
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("run did not report the unavailable address")
+		}
+		if !strings.Contains(err.Error(), "starting web server") {
+			t.Errorf("error does not report the server: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("run did not report the unavailable address")
 	}
 }

@@ -89,10 +89,10 @@ func serve(ctx context.Context, server *http.Server) error {
 }
 
 func serverError(err error) error {
-	if errors.Is(err, http.ErrServerClosed) {
+	if err == nil || errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
-	return err
+	return fmt.Errorf("starting web server: %w", err)
 }
 
 // resolveOptions merges config file values with CLI-provided values.
