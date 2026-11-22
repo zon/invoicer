@@ -615,110 +615,146 @@ func TestDetailShowsProjectForm(t *testing.T) {
 	}
 }
 
+var editRoles = []struct {
+	name string
+	role access.Role
+}{
+	{"admin", access.Admin},
+	{"customer", access.Customer},
+}
+
+func signedInAs(name string, role access.Role) *fakeAccess {
+	return &fakeAccess{user: &access.User{
+		Email:   name + "@example.com",
+		Role:    role,
+		Expires: time.Now().Add(time.Hour),
+	}}
+}
+
 func TestPostProjectChangesProject(t *testing.T) {
-	stored := &invoice.Invoice{
-		Month:    time.October,
-		Year:     2027,
-		Customer: "Acme Corp",
-		Project:  "Website Redesign",
-		Rate:     100,
-		Weeks:    []invoice.Week{{Hours: 10}},
-	}
-	s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+	for _, role := range editRoles {
+		t.Run(role.name, func(t *testing.T) {
+			stored := &invoice.Invoice{
+				Month:    time.October,
+				Year:     2027,
+				Customer: "Acme Corp",
+				Project:  "Website Redesign",
+				Rate:     100,
+				Weeks:    []invoice.Week{{Hours: 10}},
+			}
+			s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+			auth := signedInAs(role.name, role.role)
 
-	recorder := post(t, s, "/2027/oct", url.Values{"project": {"Mobile App"}})
-	if recorder.Code != http.StatusSeeOther {
-		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusSeeOther)
-	}
-	if location := recorder.Header().Get("Location"); location != "/2027/oct" {
-		t.Errorf("location: got %q, want %q", location, "/2027/oct")
-	}
-	if stored.Project != "Mobile App" {
-		t.Errorf("Project: got %q, want %q", stored.Project, "Mobile App")
-	}
+			recorder := postWithAccess(t, s, auth, "/2027/oct", url.Values{"project": {"Mobile App"}})
+			if recorder.Code != http.StatusSeeOther {
+				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusSeeOther)
+			}
+			if location := recorder.Header().Get("Location"); location != "/2027/oct" {
+				t.Errorf("location: got %q, want %q", location, "/2027/oct")
+			}
+			if stored.Project != "Mobile App" {
+				t.Errorf("Project: got %q, want %q", stored.Project, "Mobile App")
+			}
 
-	for _, path := range []string{"/", "/2027/oct"} {
-		body := get(t, s, path).Body.String()
-		if !strings.Contains(body, "Mobile App") {
-			t.Errorf("%s does not show the new project", path)
-		}
-		if strings.Contains(body, "Website Redesign") {
-			t.Errorf("%s still shows the old project", path)
-		}
+			for _, path := range []string{"/", "/2027/oct"} {
+				body := getWithAccess(t, s, auth, path).Body.String()
+				if !strings.Contains(body, "Mobile App") {
+					t.Errorf("%s does not show the new project", path)
+				}
+				if strings.Contains(body, "Website Redesign") {
+					t.Errorf("%s still shows the old project", path)
+				}
+			}
+		})
 	}
 }
 
 func TestPostProjectClearsProject(t *testing.T) {
-	stored := &invoice.Invoice{
-		Month:    time.October,
-		Year:     2027,
-		Customer: "Acme Corp",
-		Project:  "Website Redesign",
-		Rate:     100,
-	}
-	s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+	for _, role := range editRoles {
+		t.Run(role.name, func(t *testing.T) {
+			stored := &invoice.Invoice{
+				Month:    time.October,
+				Year:     2027,
+				Customer: "Acme Corp",
+				Project:  "Website Redesign",
+				Rate:     100,
+			}
+			s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+			auth := signedInAs(role.name, role.role)
 
-	recorder := post(t, s, "/2027/oct", url.Values{"project": {""}})
-	if recorder.Code != http.StatusSeeOther {
-		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusSeeOther)
-	}
-	if stored.Project != "" {
-		t.Errorf("Project: got %q, want empty", stored.Project)
-	}
+			recorder := postWithAccess(t, s, auth, "/2027/oct", url.Values{"project": {""}})
+			if recorder.Code != http.StatusSeeOther {
+				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusSeeOther)
+			}
+			if stored.Project != "" {
+				t.Errorf("Project: got %q, want empty", stored.Project)
+			}
 
-	body := get(t, s, "/2027/oct").Body.String()
-	if strings.Contains(body, "<dt>Project</dt>") {
-		t.Error("detail contains a project entry after the project was cleared")
-	}
-	if input := projectInput(t, projectForm(t, body)); !strings.Contains(input, `value=""`) {
-		t.Errorf("project input is not empty: %s", input)
+			body := getWithAccess(t, s, auth, "/2027/oct").Body.String()
+			if strings.Contains(body, "<dt>Project</dt>") {
+				t.Error("detail contains a project entry after the project was cleared")
+			}
+			if input := projectInput(t, projectForm(t, body)); !strings.Contains(input, `value=""`) {
+				t.Errorf("project input is not empty: %s", input)
+			}
+		})
 	}
 }
 
 func TestPostProjectTrimsWhitespace(t *testing.T) {
-	stored := &invoice.Invoice{
-		Month:    time.October,
-		Year:     2027,
-		Customer: "Acme Corp",
-		Rate:     100,
-	}
-	s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+	for _, role := range editRoles {
+		t.Run(role.name, func(t *testing.T) {
+			stored := &invoice.Invoice{
+				Month:    time.October,
+				Year:     2027,
+				Customer: "Acme Corp",
+				Rate:     100,
+			}
+			s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+			auth := signedInAs(role.name, role.role)
 
-	recorder := post(t, s, "/2027/oct", url.Values{"project": {"  Mobile App  "}})
-	if recorder.Code != http.StatusSeeOther {
-		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusSeeOther)
-	}
-	if stored.Project != "Mobile App" {
-		t.Errorf("Project: got %q, want %q", stored.Project, "Mobile App")
+			recorder := postWithAccess(t, s, auth, "/2027/oct", url.Values{"project": {"  Mobile App  "}})
+			if recorder.Code != http.StatusSeeOther {
+				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusSeeOther)
+			}
+			if stored.Project != "Mobile App" {
+				t.Errorf("Project: got %q, want %q", stored.Project, "Mobile App")
+			}
+		})
 	}
 }
 
 func TestPostProjectReturnsNotFound(t *testing.T) {
-	stored := &invoice.Invoice{
-		Month:    time.October,
-		Year:     2027,
-		Customer: "Acme Corp",
-		Project:  "Website Redesign",
-		Rate:     100,
-	}
+	for _, role := range editRoles {
+		t.Run(role.name, func(t *testing.T) {
+			auth := signedInAs(role.name, role.role)
 
-	for _, path := range []string{
-		"/2026/oct",
-		"/2027/sep",
-		"/2027/foo",
-		"/2027/13",
-		"/not-a-year/oct",
-	} {
-		t.Run(path, func(t *testing.T) {
-			s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+			for _, path := range []string{
+				"/2026/oct",
+				"/2027/sep",
+				"/2027/foo",
+				"/2027/13",
+				"/not-a-year/oct",
+			} {
+				t.Run(path, func(t *testing.T) {
+					stored := &invoice.Invoice{
+						Month:    time.October,
+						Year:     2027,
+						Customer: "Acme Corp",
+						Project:  "Website Redesign",
+						Rate:     100,
+					}
+					s := &fakeStore{invoices: []*invoice.Invoice{stored}}
 
-			recorder := post(t, s, path, url.Values{"project": {"Mobile App"}})
+					recorder := postWithAccess(t, s, auth, path, url.Values{"project": {"Mobile App"}})
 
-			if recorder.Code != http.StatusNotFound {
-				t.Errorf("status: got %d, want %d", recorder.Code, http.StatusNotFound)
-			}
-			if stored.Project != "Website Redesign" {
-				t.Errorf("Project: got %q, want %q", stored.Project, "Website Redesign")
+					if recorder.Code != http.StatusNotFound {
+						t.Errorf("status: got %d, want %d", recorder.Code, http.StatusNotFound)
+					}
+					if stored.Project != "Website Redesign" {
+						t.Errorf("Project: got %q, want %q", stored.Project, "Website Redesign")
+					}
+				})
 			}
 		})
 	}
