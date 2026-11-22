@@ -64,10 +64,8 @@ func TestLoginRedirectsWithSignInState(t *testing.T) {
 			t.Errorf("%s is empty", name)
 		}
 	}
-	for _, scope := range []string{"openid", "email", "profile", "groups"} {
-		if !contains(strings.Fields(query.Get("scope")), scope) {
-			t.Errorf("scope does not contain %q: %q", scope, query.Get("scope"))
-		}
+	if got := query.Get("scope"); got != "openid email profile groups" {
+		t.Errorf("scope: got %q, want %q", got, "openid email profile groups")
 	}
 
 	cookie := findCookie(t, recorder, signInCookieName)
@@ -94,6 +92,22 @@ func TestLoginRedirectsWithSignInState(t *testing.T) {
 	if state.ReturnTo != "/2027/oct" {
 		t.Errorf("cookie return path: got %q, want %q", state.ReturnTo, "/2027/oct")
 	}
+
+	challenge := sha256.Sum256([]byte(state.Verifier))
+	if got, want := query.Get("code_challenge"), base64.RawURLEncoding.EncodeToString(challenge[:]); got != want {
+		t.Errorf("code challenge: got %q, want %q", got, want)
+	}
+
+	if err := a.signIn.Decode(signInCookieName, tamper(cookieValue(t, cookie)), &state); err == nil {
+		t.Error("tampered sign-in cookie was accepted")
+	}
+}
+
+func tamper(value string) string {
+	if strings.HasPrefix(value, "A") {
+		return "B" + value[1:]
+	}
+	return "A" + value[1:]
 }
 
 func TestCallbackStartsSession(t *testing.T) {

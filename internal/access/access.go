@@ -95,7 +95,7 @@ func New(ctx context.Context, opts Options) (*Access, error) {
 			ClientSecret: opts.ClientSecret,
 			Endpoint:     provider.Endpoint(),
 			RedirectURL:  redirectURL,
-			Scopes:       []string{oidc.ScopeOpenID, "email", "profile", opts.GroupsClaim},
+			Scopes:       []string{oidc.ScopeOpenID, "email", "profile", "groups"},
 		},
 		verifier:      provider.Verifier(&oidc.Config{ClientID: opts.ClientID}),
 		adminGroup:    opts.AdminGroup,
