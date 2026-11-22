@@ -36,6 +36,19 @@ func goVersion(t *testing.T, root string) string {
 	return match[1]
 }
 
+func TestContainerfileRunsInvoicerWithArguments(t *testing.T) {
+	root := repoRoot(t)
+	containerfile := readFile(t, filepath.Join(root, "deploy", "container", "Containerfile"))
+
+	entrypoint := regexp.MustCompile(`(?m)^ENTRYPOINT \["(?:/[^"]*/)?invoicer"\]$`).FindString(containerfile)
+	if entrypoint == "" {
+		t.Fatal("entrypoint does not run invoicer in exec form")
+	}
+	if regexp.MustCompile(`(?m)^CMD\b`).MatchString(containerfile) {
+		t.Fatal("image sets default arguments instead of passing them through")
+	}
+}
+
 func TestContainerfileBuildsFromRepositoryRoot(t *testing.T) {
 	root := repoRoot(t)
 	containerfile := readFile(t, filepath.Join(root, "deploy", "container", "Containerfile"))
