@@ -1,0 +1,10 @@
+- Add gopdf as a direct dependency at its latest release, and embed an open-license Unicode TrueType font that covers punctuation and non-Latin letters. Rendering uses only the embedded font, and a copied font file brings its license into the repo.
+- Render an invoice as a PDF in the web component. The PDF uses A4 portrait pages and shows the vendor, customer, project when set, month and year, hourly rate, every weekly line item with its date range and hours, paid status, total, and a paid marker when the invoice is paid. The total uses the invoice total logic. Content flows onto more pages when it does not fit, and a project that is not set is omitted.
+- Long values wrap and stay inside the page. Stored values render as text, including punctuation and non-Latin letters, and a value like `<script>alert(1)</script>` appears literally with no markup.
+- The `GET /:year/:month/pdf` route returns a PDF response with the attachment filename `invoice-YYYY-MM.pdf`, using a two-digit month, and renders the latest stored values on every request without changing the database.
+- A PDF request for an unknown year, an unknown month, or a month with no stored invoice returns 404.
+- The PDF route requires a valid session. Every signed-in user downloads every invoice's PDF, including a paid invoice. A request without a session goes to `/login` and returns to the download address after sign-in. Without access settings the PDF downloads directly.
+- The invoice detail links to the invoice PDF at the detail address plus `/pdf`.
+- A failed render returns 500 and sends no PDF and no partial document.
+- Automated tests cover the PDF content, paid marker, omitted project, wrapped long values, literal stored text, download filename with a two-digit month, the PDF media type, the latest values after a project edit, the 404 responses, admin and customer downloads, the no-session redirect back to the download address, no sign-in mode, and a failed render. The binary-only test also downloads a PDF.
+- The README documents that a user downloads an invoice as a PDF from its detail page.

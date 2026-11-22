@@ -1,7 +1,7 @@
 # Web Specification
 
 ## Purpose
-The web app lists invoices from the invoice database, renders a selected invoice from its stored data, changes an invoice's project, and shows its paid status.
+The web app lists invoices from the invoice database, renders a selected invoice from its stored data, downloads it as a PDF, changes an invoice's project, and shows its paid status.
 
 ## Requirements
 
@@ -28,7 +28,7 @@ The total SHALL follow [Invoice Amount](invoices.md#requirement-invoice-amount).
 ### Requirement: Invoice Detail
 The detail address SHALL use the year and three-letter lowercase month name, like `/2027/oct`. The detail SHALL show vendor, customer, project when set, month, year, hourly rate, every weekly line item, paid status, and total. Each weekly line item SHALL show its date range and hours. The detail SHALL show the project edit form while the invoice is unpaid, as [Project Edits](project-edits.md#requirement-project-edit-form) describes, and the paid status form for an admin user, as [Paid Status](paid-status.md#requirement-paid-status-update) describes.
 
-The detail SHALL be a full page. It SHALL show only the invoice and SHALL link back to the invoice list.
+The detail SHALL be a full page. It SHALL show only the invoice and SHALL link back to the invoice list. It SHALL link to the invoice PDF at the detail address plus `/pdf`, as [PDF](pdf.md) describes.
 
 #### Scenario: Direct detail request
 - GIVEN a stored invoice for October 2027
@@ -36,6 +36,7 @@ The detail SHALL be a full page. It SHALL show only the invoice and SHALL link b
 - THEN the response is a complete page showing that invoice
 - AND the page shows no other invoice
 - AND the page links back to the invoice list
+- AND the page links to `/2027/oct/pdf`
 - AND the detail shows vendor, customer, project, month, year, rate, each week's date range and hours, paid status, and total
 
 #### Scenario: Returning to the list
@@ -68,7 +69,7 @@ The app SHALL return 404 for an unknown year, an unknown month, or a month with 
 - THEN the app returns 404
 
 ### Requirement: HTML Pages
-The app SHALL return a complete HTML page for every response and SHALL NOT expose a JSON API.
+The app SHALL return a complete HTML page for every page response and SHALL NOT expose a JSON API. The PDF download SHALL follow [PDF](pdf.md).
 
 #### Scenario: Pages are HTML
 - GIVEN a stored invoice
@@ -76,7 +77,7 @@ The app SHALL return a complete HTML page for every response and SHALL NOT expos
 - THEN the response is a complete HTML page
 
 ### Requirement: Escaping
-The app SHALL escape stored values in every response. It SHALL never render an invoice field as raw HTML.
+The app SHALL escape stored values in every page. It SHALL never render an invoice field as raw HTML. The PDF SHALL render stored values as text, as [PDF](pdf.md#requirement-invoice-pdf) describes.
 
 #### Scenario: Stored markup is text
 - GIVEN a vendor named `<script>alert(1)</script>`
@@ -85,7 +86,7 @@ The app SHALL escape stored values in every response. It SHALL never render an i
 - AND the browser runs no script
 
 ### Requirement: Invoice Access
-The app SHALL require a valid session for every page and SHALL allow every signed-in user to read every invoice. It SHALL change only the project and the paid status. Every signed-in user changes the project on an unpaid invoice, as [Project Edits](project-edits.md) describes. Only an admin user changes the paid status, as [Paid Status](paid-status.md#requirement-paid-status-access) describes. A paid invoice keeps its values and project until an admin marks it unpaid. Sign-in, roles, sessions, and access configuration SHALL follow [Access](access.md).
+The app SHALL require a valid session for every page and every PDF download and SHALL allow every signed-in user to read every invoice. It SHALL change only the project and the paid status. Every signed-in user changes the project on an unpaid invoice, as [Project Edits](project-edits.md) describes. Only an admin user changes the paid status, as [Paid Status](paid-status.md#requirement-paid-status-access) describes. A paid invoice keeps its values and project until an admin marks it unpaid. Sign-in, roles, sessions, and access configuration SHALL follow [Access](access.md).
 
 #### Scenario: Signed-in user reads the list
 - GIVEN a signed-in admin or customer user
@@ -100,7 +101,7 @@ The app SHALL require a valid session for every page and SHALL allow every signe
 ### Requirement: Web Command
 `invoicer web` SHALL start the web server. The database path SHALL come from `--database`, then the `database` config value, then the default, as [Database Location](config.md#requirement-database-location) describes. `--address` SHALL set the listen address and SHALL default to `:8080`.
 
-The server SHALL serve pages and the stylesheet from the binary. It SHALL need no support files beside the binary.
+The server SHALL serve pages, the stylesheet, and the PDF from the binary, with the PDF font embedded. It SHALL need no support files beside the binary.
 
 When the server starts, the command SHALL print one line that gives the app's local URL as a link. It SHALL NOT print request logs, route lists, or framework diagnostics.
 
@@ -127,7 +128,7 @@ An interrupt SHALL stop the server gracefully.
 
 #### Scenario: Binary needs no support files
 - GIVEN the binary alone in an empty directory and a valid access configuration
-- WHEN a signed-in user requests pages and the stylesheet
+- WHEN a signed-in user requests pages, the stylesheet, and a PDF
 - THEN they load
 
 #### Scenario: Database cannot open
