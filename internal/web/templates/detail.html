@@ -7,6 +7,7 @@
   {{with .Invoice}}
   <section class="invoice-detail">
     <h2>{{.Customer}} — {{.Month}} {{.Year}}</h2>
+    <p class="pdf-download"><a href="{{.Path}}/pdf">Download PDF</a></p>
     <dl>
       <dt>Vendor</dt>
       <dd>{{.Vendor}}</dd>

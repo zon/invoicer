@@ -617,6 +617,47 @@ func TestDetailShowsFullPageWithBackLink(t *testing.T) {
 	}
 }
 
+func TestDetailLinksToInvoicePDF(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		month time.Month
+		year  int
+		path  string
+	}{
+		{"October", time.October, 2027, "/2027/oct"},
+		{"January", time.January, 2028, "/2028/jan"},
+	} {
+		for _, paid := range []bool{false, true} {
+			status := "unpaid"
+			if paid {
+				status = "paid"
+			}
+			t.Run(tc.name+" "+status, func(t *testing.T) {
+				stored := &invoice.Invoice{
+					Month:    tc.month,
+					Year:     tc.year,
+					Customer: "Acme Corp",
+					Rate:     100,
+					Paid:     paid,
+				}
+
+				recorder := get(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, tc.path)
+				if recorder.Code != http.StatusOK {
+					t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
+				}
+
+				body := recorder.Body.String()
+				if !strings.Contains(body, `href="`+tc.path+`/pdf"`) {
+					t.Errorf("detail does not link to %q", tc.path+"/pdf")
+				}
+				if !strings.Contains(body, "Download PDF") {
+					t.Error("detail does not label the PDF link")
+				}
+			})
+		}
+	}
+}
+
 var (
 	formPattern  = regexp.MustCompile(`(?s)<form\b.*?</form>`)
 	inputPattern = regexp.MustCompile(`<input\b[^>]*>`)
