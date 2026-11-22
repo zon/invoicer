@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -56,6 +57,43 @@ func runtimeStage(t *testing.T, containerfile string) string {
 		t.Fatal("Containerfile has no runtime stage")
 	}
 	return stages[len(stages)-1]
+}
+
+// apkPackages returns the packages a stage installs with apk.
+func apkPackages(stage string) []string {
+	var packages []string
+	for _, line := range strings.Split(stage, "\n") {
+		if !strings.HasPrefix(line, "RUN apk add") {
+			continue
+		}
+		for _, field := range strings.Fields(line) {
+			switch {
+			case field == "RUN", field == "apk", field == "add", field == "&&", field == "\\":
+				continue
+			case strings.HasPrefix(field, "-"):
+				continue
+			}
+			packages = append(packages, field)
+		}
+	}
+	return packages
+}
+
+func TestContainerfileBuildsSQLiteWithoutRuntimeToolchain(t *testing.T) {
+	root := repoRoot(t)
+	containerfile := readFile(t, filepath.Join(root, "deploy", "container", "Containerfile"))
+	build := strings.Split(containerfile, "\nFROM ")[0]
+	runtime := runtimeStage(t, containerfile)
+
+	buildPackages := apkPackages(build)
+	for _, tool := range []string{"gcc", "musl-dev"} {
+		if !slices.Contains(buildPackages, tool) {
+			t.Fatalf("build installs %v, want %s for CGO SQLite", buildPackages, tool)
+		}
+	}
+	if packages := apkPackages(runtime); len(packages) != 1 || packages[0] != "ca-certificates" {
+		t.Fatalf("runtime installs %v, want only CA certificates", packages)
+	}
 }
 
 func TestContainerfileRunsAsUser1000(t *testing.T) {
