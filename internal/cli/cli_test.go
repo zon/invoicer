@@ -1,13 +1,18 @@
 package cli
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/kong"
 	"github.com/zon/invoicer/internal/config"
+	"github.com/zon/invoicer/internal/invoice"
+	"github.com/zon/invoicer/internal/store"
 )
 
 // TestCLIParsesWithoutPanic verifies that the CLI struct can be parsed by kong
@@ -305,5 +310,138 @@ func TestCLIParsesSetConfigDatabaseFlag(t *testing.T) {
 	}
 	if cmd.Set.Config.Database != "/tmp/invoices.db" {
 		t.Errorf("Set.Config.Database: got %q, want %q", cmd.Set.Config.Database, "/tmp/invoices.db")
+	}
+}
+
+func TestCLIParsesWebCommand(t *testing.T) {
+	var cmd CLI
+	p, err := kong.New(&cmd, kong.Name("invoicer"), kong.Exit(func(int) {}))
+	if err != nil {
+		t.Fatalf("kong.New failed: %v", err)
+	}
+	ctx, err := p.Parse([]string{"web", "--database", "/tmp/web.db"})
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if !strings.Contains(ctx.Command(), "web") {
+		t.Errorf("expected command to be 'web', got %q", ctx.Command())
+	}
+	if cmd.Web.Database != "/tmp/web.db" {
+		t.Errorf("Web.Database: got %q, want %q", cmd.Web.Database, "/tmp/web.db")
+	}
+	if cmd.Web.Address != ":8080" {
+		t.Errorf("Web.Address: got %q, want default %q", cmd.Web.Address, ":8080")
+	}
+}
+
+func TestCLIParsesWebAddress(t *testing.T) {
+	var cmd CLI
+	p, err := kong.New(&cmd, kong.Name("invoicer"), kong.Exit(func(int) {}))
+	if err != nil {
+		t.Fatalf("kong.New failed: %v", err)
+	}
+	if _, err := p.Parse([]string{"web", "--address", "127.0.0.1:9000"}); err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if cmd.Web.Address != "127.0.0.1:9000" {
+		t.Errorf("Web.Address: got %q, want %q", cmd.Web.Address, "127.0.0.1:9000")
+	}
+}
+
+func TestWebResolveOptions_Defaults(t *testing.T) {
+	want, err := config.DefaultDatabasePath()
+	if err != nil {
+		t.Fatalf("DefaultDatabasePath: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "nonexistent.yaml")
+	opts, err := (&WebCmd{}).resolveOptions(path)
+	if err != nil {
+		t.Fatalf("resolveOptions: %v", err)
+	}
+	if opts.Address != ":8080" {
+		t.Errorf("Address: got %q, want %q", opts.Address, ":8080")
+	}
+	if opts.Database != want {
+		t.Errorf("Database: got %q, want default %q", opts.Database, want)
+	}
+}
+
+func TestWebResolveOptions_DatabaseFlagOverridesConfig(t *testing.T) {
+	path := writeTestConfig(t, "database: /var/lib/invoicer/config.db\n")
+	opts, err := (&WebCmd{Database: "/tmp/flag.db"}).resolveOptions(path)
+	if err != nil {
+		t.Fatalf("resolveOptions: %v", err)
+	}
+	if opts.Database != "/tmp/flag.db" {
+		t.Errorf("Database: got %q, want CLI value", opts.Database)
+	}
+}
+
+func TestWebResolveOptions_DatabaseConfigFallback(t *testing.T) {
+	path := writeTestConfig(t, "database: /var/lib/invoicer/config.db\n")
+	opts, err := (&WebCmd{}).resolveOptions(path)
+	if err != nil {
+		t.Fatalf("resolveOptions: %v", err)
+	}
+	if opts.Database != "/var/lib/invoicer/config.db" {
+		t.Errorf("Database: got %q, want config value", opts.Database)
+	}
+}
+
+func TestWebResolveOptions_CustomAddress(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nonexistent.yaml")
+	opts, err := (&WebCmd{Address: "127.0.0.1:9000"}).resolveOptions(path)
+	if err != nil {
+		t.Fatalf("resolveOptions: %v", err)
+	}
+	if opts.Address != "127.0.0.1:9000" {
+		t.Errorf("Address: got %q, want %q", opts.Address, "127.0.0.1:9000")
+	}
+}
+
+func TestWebRunServesInvoicesFromResolvedDatabase(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "invoices.db")
+	s, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("opening store: %v", err)
+	}
+	_, _, err = s.Save(&invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Vendor:   "Jane Smith",
+		Customer: "Acme Corp",
+		Rate:     100,
+	})
+	if err != nil {
+		t.Fatalf("saving invoice: %v", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("closing store: %v", err)
+	}
+
+	original := listenAndServe
+	defer func() { listenAndServe = original }()
+
+	var gotAddress string
+	var gotBody string
+	listenAndServe = func(address string, handler http.Handler) error {
+		gotAddress = address
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+		gotBody = recorder.Body.String()
+		return nil
+	}
+
+	configPath := writeTestConfig(t, "database: "+dbPath+"\n")
+	cmd := &WebCmd{Address: "127.0.0.1:9000"}
+
+	if err := cmd.run(configPath); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if gotAddress != "127.0.0.1:9000" {
+		t.Errorf("address: got %q, want %q", gotAddress, "127.0.0.1:9000")
+	}
+	if !strings.Contains(gotBody, "Acme Corp") {
+		t.Error("served page does not list the stored invoice")
 	}
 }

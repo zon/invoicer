@@ -11,6 +11,8 @@ import (
 	"github.com/zon/invoicer/internal/store"
 )
 
+const defaultWebAddress = ":8080"
+
 // CLI is the root command for invoicer.
 type CLI struct {
 	// Generate is the default subcommand for generating an invoice.
@@ -18,6 +20,9 @@ type CLI struct {
 
 	// Set is the 'set' subcommand group for managing configuration.
 	Set SetCmd `cmd:"" name:"set" help:"Subcommands for managing invoicer configuration."`
+
+	// Web is the subcommand for serving the invoice web app.
+	Web WebCmd `cmd:"" help:"Start the invoice web server."`
 }
 
 // GenerateCmd is the default subcommand for generating an invoice.
@@ -51,17 +56,9 @@ type GenerateCmd struct {
 // CLI values take precedence over config file values.
 // configPath may be empty to use the default path.
 func (c *GenerateCmd) resolveOptions(configPath string) (*ResolvedOptions, error) {
-	if configPath == "" {
-		var err error
-		configPath, err = config.DefaultPath()
-		if err != nil {
-			return nil, fmt.Errorf("determining config path: %w", err)
-		}
-	}
-
-	cfg, err := config.Load(configPath)
+	cfg, err := loadConfig(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("loading config: %w", err)
+		return nil, err
 	}
 
 	opts := &ResolvedOptions{
@@ -97,18 +94,44 @@ func (c *GenerateCmd) resolveOptions(configPath string) (*ResolvedOptions, error
 	}
 
 	// Merge database: CLI value takes precedence, then config, then the default.
-	opts.Database = c.Database
-	if opts.Database == "" {
-		opts.Database = cfg.Database
-	}
-	if opts.Database == "" {
-		opts.Database, err = config.DefaultDatabasePath()
-		if err != nil {
-			return nil, fmt.Errorf("determining default database path: %w", err)
-		}
+	opts.Database, err = databasePath(c.Database, cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	return opts, nil
+}
+
+// loadConfig loads the config at path, or the default config path when empty.
+func loadConfig(configPath string) (*config.Config, error) {
+	if configPath == "" {
+		var err error
+		configPath, err = config.DefaultPath()
+		if err != nil {
+			return nil, fmt.Errorf("determining config path: %w", err)
+		}
+	}
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("loading config: %w", err)
+	}
+	return cfg, nil
+}
+
+// databasePath resolves the database path from the flag, then config, then the default.
+func databasePath(flag string, cfg *config.Config) (string, error) {
+	if flag != "" {
+		return flag, nil
+	}
+	if cfg.Database != "" {
+		return cfg.Database, nil
+	}
+	path, err := config.DefaultDatabasePath()
+	if err != nil {
+		return "", fmt.Errorf("determining default database path: %w", err)
+	}
+	return path, nil
 }
 
 // ResolvedOptions holds the final merged values after CLI and config are combined.
