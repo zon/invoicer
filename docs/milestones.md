@@ -2,10 +2,6 @@
 
 High level objectives. Work through them in order. See [process](zpecs/process.md).
 
-## Paid status
-
-An admin can mark an invoice paid and mark it unpaid again. The invoice list and detail show the paid status. Customers cannot change the status. A paid invoice cannot be edited or replaced until it is marked unpaid.
-
 ## PDF downloads
 
 A user can download an invoice as a PDF. The PDF renders the invoice from its stored data. A user can download only invoices they can read.
