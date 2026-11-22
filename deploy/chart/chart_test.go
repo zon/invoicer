@@ -478,6 +478,105 @@ func TestChartRendersNoSecretValues(t *testing.T) {
 	equal(t, "oidc.cookieKeyFile", cfg.OIDC.CookieKeyFile, "/run/secrets/cookie-key")
 }
 
+func pvcName(t *testing.T, manifests []map[string]any) string {
+	t.Helper()
+	claim := findKind(t, manifests, "PersistentVolumeClaim")
+	name, _ := claim["metadata"].(map[string]any)["name"].(string)
+	if name == "" {
+		t.Fatal("persistent volume claim has no name")
+	}
+	return name
+}
+
+func assertDataMount(t *testing.T, manifests []map[string]any, claimName string) {
+	t.Helper()
+	podSpec := deploymentPodSpec(t, manifests)
+	mounts, _ := webContainer(t, manifests)["volumeMounts"].([]any)
+
+	var volumeName string
+	for _, value := range mounts {
+		mount := value.(map[string]any)
+		if mount["mountPath"] != "/data" {
+			continue
+		}
+		if mount["readOnly"] == true {
+			t.Fatal("data volume is mounted read-only")
+		}
+		volumeName, _ = mount["name"].(string)
+	}
+	if volumeName == "" {
+		t.Fatal("deployment mounts no volume at /data")
+	}
+
+	volumes, _ := podSpec["volumes"].([]any)
+	for _, value := range volumes {
+		volume := value.(map[string]any)
+		if volume["name"] != volumeName {
+			continue
+		}
+		source, _ := volume["persistentVolumeClaim"].(map[string]any)
+		if source["claimName"] != claimName {
+			t.Fatalf("volume %s reads claim %v, want %s", volumeName, source["claimName"], claimName)
+		}
+		return
+	}
+	t.Fatalf("deployment has no volume named %s", volumeName)
+}
+
+func TestPersistentVolumeClaim(t *testing.T) {
+	manifests := renderChart(t)
+	claim := findKind(t, manifests, "PersistentVolumeClaim")
+	spec := claim["spec"].(map[string]any)
+
+	accessModes, _ := spec["accessModes"].([]any)
+	if len(accessModes) != 1 || accessModes[0] != "ReadWriteOnce" {
+		t.Fatalf("access modes: got %v, want [ReadWriteOnce]", accessModes)
+	}
+	equal(t, "storageClassName", spec["storageClassName"], "reliable")
+
+	requests, _ := spec["resources"].(map[string]any)["requests"].(map[string]any)
+	equal(t, "storage", requests["storage"], "1Gi")
+
+	assertDataMount(t, manifests, pvcName(t, manifests))
+}
+
+func TestPersistentVolumeClaimUsesValues(t *testing.T) {
+	manifests := renderChart(t,
+		"--set", "data.size=5Gi",
+		"--set", "data.storageClass=fast",
+	)
+	claim := findKind(t, manifests, "PersistentVolumeClaim")
+	spec := claim["spec"].(map[string]any)
+
+	equal(t, "storageClassName", spec["storageClassName"], "fast")
+	requests, _ := spec["resources"].(map[string]any)["requests"].(map[string]any)
+	equal(t, "storage", requests["storage"], "5Gi")
+
+	assertDataMount(t, manifests, pvcName(t, manifests))
+}
+
+func TestPersistentVolumeClaimReusesExistingClaim(t *testing.T) {
+	manifests := renderChart(t, "--set", "data.existingClaim=shared-data")
+
+	for _, manifest := range manifests {
+		if manifest["kind"] == "PersistentVolumeClaim" {
+			t.Fatal("chart renders a claim instead of reusing the existing one")
+		}
+	}
+
+	assertDataMount(t, manifests, "shared-data")
+}
+
+func TestDeploymentRecreateStrategy(t *testing.T) {
+	manifests := renderChart(t)
+	deployment := findKind(t, manifests, "Deployment")
+	spec := deployment["spec"].(map[string]any)
+
+	equal(t, "replicas", spec["replicas"], 1)
+	strategy, _ := spec["strategy"].(map[string]any)
+	equal(t, "strategy.type", strategy["type"], "Recreate")
+}
+
 func TestHelmLintAndTemplate(t *testing.T) {
 	helm, err := exec.LookPath("helm")
 	if err != nil {

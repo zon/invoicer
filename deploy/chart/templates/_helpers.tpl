@@ -31,3 +31,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- define "invoicer.image" -}}
 {{- printf "%s:%s" .Values.image.repository (default .Chart.AppVersion .Values.image.tag) -}}
 {{- end -}}
+
+{{- define "invoicer.dataClaimName" -}}
+{{- default (printf "%s-data" (include "invoicer.fullname" .)) .Values.data.existingClaim -}}
+{{- end -}}

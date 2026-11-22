@@ -6,6 +6,8 @@ metadata:
     {{- include "invoicer.labels" . | nindent 4 }}
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "invoicer.selectorLabels" . | nindent 6 }}
@@ -33,6 +35,8 @@ spec:
               mountPath: /run/secrets/cookie-key
               subPath: cookie-key
               readOnly: true
+            - name: data
+              mountPath: /data
       volumes:
         - name: config
           configMap:
@@ -47,3 +51,6 @@ spec:
                 path: oidc-client-secret
               - key: {{ .Values.access.cookieKeyKey }}
                 path: cookie-key
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "invoicer.dataClaimName" . }}
