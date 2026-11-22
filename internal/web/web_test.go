@@ -2,6 +2,7 @@ package web_test
 
 import (
 	"errors"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -357,6 +358,54 @@ func TestDetailOmitsUnsetProject(t *testing.T) {
 	}
 	if strings.Contains(detail, "Project") {
 		t.Error("detail contains a project label that is not set")
+	}
+}
+
+func TestEscapesStoredValues(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Vendor:   `<script>alert("vendor")</script>`,
+		Customer: `<img src=x onerror=alert("customer")>`,
+		Project:  `<b>Project & Co</b>`,
+		Rate:     100,
+		Weeks: []invoice.Week{{
+			Start: time.Date(2027, time.October, 4, 0, 0, 0, 0, time.UTC),
+			End:   time.Date(2027, time.October, 10, 0, 0, 0, 0, time.UTC),
+			Hours: 40,
+		}},
+	}
+
+	cases := []struct {
+		name    string
+		path    string
+		headers map[string]string
+		fields  []string
+	}{
+		{"list", "/", nil, []string{stored.Customer, stored.Project}},
+		{"detail", "/2027/oct", nil, []string{stored.Vendor, stored.Customer, stored.Project}},
+		{"partial", "/2027/oct", map[string]string{"HX-Request": "true"}, []string{stored.Vendor, stored.Customer, stored.Project}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := request(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, tc.path, tc.headers)
+
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
+			}
+
+			body := recorder.Body.String()
+			for _, field := range tc.fields {
+				escaped := template.HTMLEscapeString(field)
+				if !strings.Contains(body, escaped) {
+					t.Errorf("body does not contain escaped value %q", escaped)
+				}
+				if strings.Contains(body, field) {
+					t.Errorf("body renders raw value %q", field)
+				}
+			}
+		})
 	}
 }
 
