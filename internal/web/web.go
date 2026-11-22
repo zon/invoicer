@@ -27,6 +27,8 @@ var templateFiles embed.FS
 //go:embed static/style.css
 var styleCSS []byte
 
+const userContextKey = "currentUser"
+
 // Store provides the invoices the web app reads.
 type Store interface {
 	List() ([]*invoice.Invoice, error)
@@ -95,10 +97,12 @@ func (s *Server) Router() http.Handler {
 }
 
 type indexData struct {
+	User     *access.User
 	Invoices []invoiceRow
 }
 
 type detailData struct {
+	User    *access.User
 	Invoice *invoiceDetail
 }
 
@@ -138,13 +142,24 @@ func (s *Server) requireUser(c *gin.Context) {
 		c.Next()
 		return
 	}
-	if _, ok := s.access.CurrentUser(c); ok {
-		c.Next()
+	user, ok := s.access.CurrentUser(c)
+	if !ok {
+		next := url.QueryEscape(c.Request.URL.RequestURI())
+		c.Redirect(http.StatusFound, "/login?next="+next)
+		c.Abort()
 		return
 	}
-	next := url.QueryEscape(c.Request.URL.RequestURI())
-	c.Redirect(http.StatusFound, "/login?next="+next)
-	c.Abort()
+	c.Set(userContextKey, user)
+	c.Next()
+}
+
+func currentUser(c *gin.Context) *access.User {
+	value, ok := c.Get(userContextKey)
+	if !ok {
+		return nil
+	}
+	user, _ := value.(*access.User)
+	return user
 }
 
 func (s *Server) index(c *gin.Context) {
@@ -155,6 +170,7 @@ func (s *Server) index(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "index.html", indexData{
+		User:     currentUser(c),
 		Invoices: rows(invoices),
 	})
 }
@@ -183,6 +199,7 @@ func (s *Server) show(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "detail.html", detailData{
+		User:    currentUser(c),
 		Invoice: detail(inv),
 	})
 }

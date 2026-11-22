@@ -192,6 +192,37 @@ func TestSignedInUserReadsInvoices(t *testing.T) {
 	}
 }
 
+func TestSignedInPagesShowEmailAndSignOut(t *testing.T) {
+	user := &access.User{
+		Email:   "jane@example.com",
+		Role:    access.Customer,
+		Expires: time.Now().Add(time.Hour),
+	}
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Rate:     100,
+	}
+
+	for _, path := range []string{"/", "/2027/oct"} {
+		t.Run(path, func(t *testing.T) {
+			recorder := getWithAccess(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, &fakeAccess{user: user}, path)
+
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
+			}
+
+			body := recorder.Body.String()
+			for _, want := range []string{"jane@example.com", `href="/logout"`, "Sign out"} {
+				if !strings.Contains(body, want) {
+					t.Errorf("body does not contain %q", want)
+				}
+			}
+		})
+	}
+}
+
 func TestListShowsEveryInvoiceNewestFirst(t *testing.T) {
 	older := &invoice.Invoice{
 		Month:    time.October,
