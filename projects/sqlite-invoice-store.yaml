@@ -1,9 +1,0 @@
-- Add a `database` config value with a default of `~/.invoicer/invoices.db`. `invoicer set config --database <path>` writes it. `invoicer --database <path>` overrides it for one run.
-- Store generated invoices and their weekly line items in a SQLite database using GORM, creating the database file and its parent directory on first use and migrating the schema automatically.
-- Assign each stored invoice an opaque identifier on first save. Saving the same customer, year, month, and project again replaces the stored values and weeks while keeping the identifier. A different project creates a separate invoice.
-- Save an invoice and its weeks in one transaction, so a failed save leaves any previously stored invoice unchanged.
-- "`invoicer` saves the invoice instead of writing HTML or PDF files, prints the invoice identifier, and no longer creates `./invoices` directories or file-path output."
-- Remove the `--pdf`/`-p` and `--model`/`-m` options from generate, and the `--pdf` and `--model` options from `set config`. The `pdf` and `model` config values are ignored.
-- Remove HTML and PDF generation, the opencode prompt and subprocess, the invoice file-path helpers, and the Playwright dependency. Keep the month, week, and total logic. Update `docs/stack.md` so it describes SQLite storage instead of HTML and PDF generation.
-- "Rewrite `README.md` for the database-backed CLI: remove opencode, HTML, PDF, and wkhtmltopdf content, document `database`, and show generate printing an invoice identifier."
-- Remove the SQLite invoice store section from `docs/milestones.md`.

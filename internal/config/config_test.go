@@ -3,12 +3,11 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/zon/invoicer/internal/config"
 )
-
-func boolPtr(b bool) *bool { return &b }
 
 func TestLoad_FileNotExist(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
@@ -20,7 +19,7 @@ func TestLoad_FileNotExist(t *testing.T) {
 		t.Fatal("expected non-nil config")
 	}
 	// All fields should be zero values.
-	if cfg.Vendor != "" || cfg.Customer != "" || cfg.Rate != 0 || cfg.Hours != 0 || cfg.PDF != nil || cfg.Model != "" || cfg.Project != "" {
+	if cfg.Vendor != "" || cfg.Customer != "" || cfg.Rate != 0 || cfg.Hours != 0 || cfg.Project != "" || cfg.Database != "" {
 		t.Errorf("expected empty config, got: %+v", cfg)
 	}
 }
@@ -35,6 +34,7 @@ hours: 40
 pdf: true
 model: deepseek/deepseek-flash
 project: Website Redesign
+database: /var/lib/invoicer/invoices.db
 `
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("writing test config: %v", err)
@@ -56,14 +56,11 @@ project: Website Redesign
 	if cfg.Hours != 40 {
 		t.Errorf("Hours: got %v, want 40", cfg.Hours)
 	}
-	if cfg.PDF == nil || !*cfg.PDF {
-		t.Errorf("PDF: got %v, want true", cfg.PDF)
-	}
-	if cfg.Model != "deepseek/deepseek-flash" {
-		t.Errorf("Model: got %q, want %q", cfg.Model, "deepseek/deepseek-flash")
-	}
 	if cfg.Project != "Website Redesign" {
 		t.Errorf("Project: got %q, want %q", cfg.Project, "Website Redesign")
+	}
+	if cfg.Database != "/var/lib/invoicer/invoices.db" {
+		t.Errorf("Database: got %q, want %q", cfg.Database, "/var/lib/invoicer/invoices.db")
 	}
 }
 
@@ -88,8 +85,6 @@ func TestSave_CreatesFileAndDirectory(t *testing.T) {
 		Customer: "Client Inc",
 		Rate:     100,
 		Hours:    35,
-		PDF:      boolPtr(false),
-		Model:    "deepseek/deepseek-flash",
 	}
 
 	if err := config.Save(path, updates); err != nil {
@@ -115,12 +110,6 @@ func TestSave_CreatesFileAndDirectory(t *testing.T) {
 	}
 	if cfg.Hours != 35 {
 		t.Errorf("Hours: got %v, want 35", cfg.Hours)
-	}
-	if cfg.PDF == nil || *cfg.PDF != false {
-		t.Errorf("PDF: got %v, want false", cfg.PDF)
-	}
-	if cfg.Model != "deepseek/deepseek-flash" {
-		t.Errorf("Model: got %q, want %q", cfg.Model, "deepseek/deepseek-flash")
 	}
 }
 
@@ -186,6 +175,39 @@ func TestSave_SavesProject(t *testing.T) {
 	}
 }
 
+func TestSave_SavesDatabase(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	if err := config.Save(path, &config.Config{Database: "/var/lib/invoicer/invoices.db"}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Database != "/var/lib/invoicer/invoices.db" {
+		t.Errorf("Database: got %q, want %q", cfg.Database, "/var/lib/invoicer/invoices.db")
+	}
+}
+
+func TestDefaultDatabasePath(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir: %v", err)
+	}
+
+	got, err := config.DefaultDatabasePath()
+	if err != nil {
+		t.Fatalf("DefaultDatabasePath: %v", err)
+	}
+	want := filepath.Join(home, ".invoicer", "invoices.db")
+	if got != want {
+		t.Errorf("DefaultDatabasePath: got %q, want %q", got, want)
+	}
+}
+
 func TestSave_OnlyUpdatesSpecifiedFields(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
@@ -196,16 +218,14 @@ func TestSave_OnlyUpdatesSpecifiedFields(t *testing.T) {
 		Customer: "C1",
 		Rate:     50,
 		Hours:    20,
-		PDF:      boolPtr(true),
-		Model:    "deepseek/deepseek-flash",
+		Database: "/var/lib/invoicer/initial.db",
 	}
 	if err := config.Save(path, initial); err != nil {
 		t.Fatalf("initial Save: %v", err)
 	}
 
-	// Update only PDF.
-	pdfFalse := false
-	if err := config.Save(path, &config.Config{PDF: &pdfFalse}); err != nil {
+	// Update only the project.
+	if err := config.Save(path, &config.Config{Project: "Mobile App"}); err != nil {
 		t.Fatalf("update Save: %v", err)
 	}
 
@@ -225,10 +245,38 @@ func TestSave_OnlyUpdatesSpecifiedFields(t *testing.T) {
 	if cfg.Hours != 20 {
 		t.Errorf("Hours should be unchanged: got %v", cfg.Hours)
 	}
-	if cfg.PDF == nil || *cfg.PDF != false {
-		t.Errorf("PDF should be updated to false: got %v", cfg.PDF)
+	if cfg.Database != "/var/lib/invoicer/initial.db" {
+		t.Errorf("Database should be unchanged: got %q", cfg.Database)
 	}
-	if cfg.Model != "deepseek/deepseek-flash" {
-		t.Errorf("Model should be unchanged: got %q", cfg.Model)
+	if cfg.Project != "Mobile App" {
+		t.Errorf("Project should be updated: got %q", cfg.Project)
+	}
+}
+
+func TestSave_DropsRemovedValues(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	content := `vendor: V1
+pdf: true
+model: deepseek/deepseek-flash
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("writing test config: %v", err)
+	}
+
+	if err := config.Save(path, &config.Config{Rate: 100}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	got := string(data)
+	if strings.Contains(got, "pdf:") {
+		t.Errorf("saved config still has pdf: %q", got)
+	}
+	if strings.Contains(got, "model:") {
+		t.Errorf("saved config still has model: %q", got)
 	}
 }

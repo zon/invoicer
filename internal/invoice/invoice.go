@@ -172,3 +172,18 @@ func absDuration(d time.Duration) time.Duration {
 	}
 	return d
 }
+
+// FormatWeekLabel returns a human-readable label for a week range.
+func FormatWeekLabel(w Week) string {
+	if w.Start.Month() == w.End.Month() {
+		return fmt.Sprintf("%s %d-%d", w.Start.Month().String()[:3], w.Start.Day(), w.End.Day())
+	}
+	return fmt.Sprintf("%s %d - %s %d",
+		w.Start.Month().String()[:3], w.Start.Day(),
+		w.End.Month().String()[:3], w.End.Day())
+}
+
+// Now returns the current time. Exposed as a variable for testing.
+var Now = func() time.Time {
+	return time.Now()
+}
