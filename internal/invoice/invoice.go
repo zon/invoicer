@@ -30,6 +30,8 @@ type Invoice struct {
 	Project string
 	// Rate is the hourly rate in dollars.
 	Rate float64
+	// Paid reports whether the customer has paid the invoice.
+	Paid bool
 	// Weeks is the list of weekly line items.
 	Weeks []Week
 }

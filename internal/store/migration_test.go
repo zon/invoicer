@@ -4,7 +4,60 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
+
+func TestOpenAddsUnpaidStatusToExistingInvoices(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "invoices.db")
+	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("open existing database: %v", err)
+	}
+
+	statements := []string{
+		`CREATE TABLE invoices (id text PRIMARY KEY, month integer, year integer, vendor text, customer text, project text, rate real)`,
+		`INSERT INTO invoices (id, month, year, vendor, customer, project, rate)
+			VALUES ('existing', 10, 2027, 'Vendor', 'Customer', 'Project', 100)`,
+	}
+	for _, statement := range statements {
+		if err := db.Exec(statement).Error; err != nil {
+			t.Fatalf("prepare existing database: %v", err)
+		}
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("get database connection: %v", err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		t.Fatalf("close existing database: %v", err)
+	}
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := s.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	})
+
+	got, err := s.Get("existing")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Paid {
+		t.Error("expected an existing invoice to be unpaid")
+	}
+	if got.Customer != "Customer" {
+		t.Errorf("Customer: got %q, want %q", got.Customer, "Customer")
+	}
+}
 
 func TestOpenKeepsNewestInvoicePerMonthAndRemovesOthers(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "invoices.db")

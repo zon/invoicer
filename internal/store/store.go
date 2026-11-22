@@ -26,6 +26,7 @@ type Invoice struct {
 	Customer string
 	Project  string
 	Rate     float64
+	Paid     bool   `gorm:"not null;default:false"`
 	Weeks    []Week `gorm:"foreignKey:InvoiceID;constraint:OnDelete:CASCADE"`
 }
 
@@ -305,6 +306,7 @@ func toInvoice(record *Invoice) *invoice.Invoice {
 		Customer: record.Customer,
 		Project:  record.Project,
 		Rate:     record.Rate,
+		Paid:     record.Paid,
 		Weeks:    make([]invoice.Week, 0, len(record.Weeks)),
 	}
 	for _, w := range record.Weeks {
