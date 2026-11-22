@@ -1,3 +1,9 @@
+- path: deploy/chart
+  description: Deploys the web app and CLI to Kubernetes with Helm.
+
+- path: deploy/container
+  description: Builds the image that runs the invoice CLI and web app.
+
 - path: internal/access
   description: Manages sign-in and sessions through an OpenID Connect provider.
 
