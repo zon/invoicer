@@ -1,0 +1,53 @@
+{{- if .Values.cli.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "invoicer.fullname" . }}-cli
+  labels:
+    {{- include "invoicer.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: cli
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  {{- include "invoicer.selectorLabels" . | nindent 18 }}
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: cli
+          image: {{ include "invoicer.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.cli.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: config
+              mountPath: /home/invoicer/.invoicer/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "invoicer.fullname" . }}-config
+            defaultMode: 0444
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "invoicer.dataClaimName" . }}
+{{- end }}
