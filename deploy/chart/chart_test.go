@@ -607,6 +607,17 @@ func assertPort(t *testing.T, name string, source map[string]any, key string, wa
 	}
 }
 
+func TestWebPodGracePeriod(t *testing.T) {
+	podSpec := deploymentPodSpec(t, renderChart(t))
+	grace, ok := podSpec["terminationGracePeriodSeconds"].(int)
+	if !ok {
+		t.Fatal("web pod sets no termination grace period")
+	}
+	if grace <= 10 {
+		t.Fatalf("termination grace period %ds does not cover the 10s shutdown timeout", grace)
+	}
+}
+
 func TestWebPodSecurityContext(t *testing.T) {
 	manifests := renderChart(t)
 	podSpec := deploymentPodSpec(t, manifests)
