@@ -280,6 +280,23 @@ func (s *Store) GetByMonth(year int, month time.Month) (*invoice.Invoice, error)
 	return toInvoice(&record), nil
 }
 
+// SetProject sets the project on the invoice for the given year and month. It
+// changes only the project and reports ErrNotFound when that month holds no
+// invoice.
+func (s *Store) SetProject(year int, month time.Month, project string) error {
+	result := s.db.
+		Model(&Invoice{}).
+		Where("year = ? AND month = ?", year, int(month)).
+		Update("project", project)
+	if result.Error != nil {
+		return fmt.Errorf("setting project for %s %d: %w", month, year, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("%w for %s %d", ErrNotFound, month, year)
+	}
+	return nil
+}
+
 func toInvoice(record *Invoice) *invoice.Invoice {
 	inv := &invoice.Invoice{
 		Month:    time.Month(record.Month),

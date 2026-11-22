@@ -127,7 +127,7 @@ Changing the customer or project replaces the stored values and keeps the identi
 
 ## Web App
 
-`invoicer web` starts a read-only web app for the stored invoices. It lists invoices at `/` and shows each invoice as a full page with a link back to the list.
+`invoicer web` starts a web app for the stored invoices. It lists invoices at `/` and shows each invoice as a full page with a link back to the list. A signed-in user can change an invoice's project from its detail page.
 
 ```
 invoicer web [options]

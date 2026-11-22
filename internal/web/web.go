@@ -29,10 +29,11 @@ var styleCSS []byte
 
 const userContextKey = "currentUser"
 
-// Store provides the invoices the web app reads.
+// Store provides the invoices the web app reads and changes.
 type Store interface {
 	List() ([]*invoice.Invoice, error)
 	GetByMonth(year int, month time.Month) (*invoice.Invoice, error)
+	SetProject(year int, month time.Month, project string) error
 }
 
 // Access signs users in and reports the current user.
@@ -79,6 +80,7 @@ func New(s Store, a ...Access) *Server {
 	}
 	server.GET("/", server.index)
 	server.GET("/:year/:month", server.show)
+	server.POST("/:year/:month", server.updateProject)
 	return server
 }
 
@@ -124,6 +126,7 @@ type invoiceDetail struct {
 	Year     int
 	Rate     string
 	Total    string
+	Path     string
 	Weeks    []weekRow
 }
 
@@ -183,15 +186,8 @@ func (s *Server) index(c *gin.Context) {
 }
 
 func (s *Server) show(c *gin.Context) {
-	year, err := strconv.Atoi(c.Param("year"))
-	if err != nil {
-		s.notFound(c)
-		return
-	}
-
-	month, err := invoice.ParseMonth(c.Param("month"))
-	if err != nil {
-		s.notFound(c)
+	year, month, ok := s.yearMonth(c)
+	if !ok {
 		return
 	}
 
@@ -209,6 +205,42 @@ func (s *Server) show(c *gin.Context) {
 		User:    currentUser(c),
 		Invoice: detail(inv),
 	})
+}
+
+func (s *Server) updateProject(c *gin.Context) {
+	year, month, ok := s.yearMonth(c)
+	if !ok {
+		return
+	}
+
+	project := strings.TrimSpace(c.PostForm("project"))
+	err := s.store.SetProject(year, month, project)
+	if errors.Is(err, store.ErrNotFound) {
+		s.notFound(c)
+		return
+	}
+	if err != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.Redirect(http.StatusSeeOther, detailPath(year, month))
+}
+
+func (s *Server) yearMonth(c *gin.Context) (int, time.Month, bool) {
+	year, err := strconv.Atoi(c.Param("year"))
+	if err != nil {
+		s.notFound(c)
+		return 0, 0, false
+	}
+
+	month, err := invoice.ParseMonth(c.Param("month"))
+	if err != nil {
+		s.notFound(c)
+		return 0, 0, false
+	}
+
+	return year, month, true
 }
 
 func (s *Server) notFound(c *gin.Context) {
@@ -250,6 +282,7 @@ func detail(inv *invoice.Invoice) *invoiceDetail {
 		Year:     inv.Year,
 		Rate:     fmt.Sprintf("$%.2f", inv.Rate),
 		Total:    fmt.Sprintf("$%.2f", inv.Total()),
+		Path:     detailPath(inv.Year, inv.Month),
 		Weeks:    weeks(inv.Weeks),
 	}
 }

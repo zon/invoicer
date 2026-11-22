@@ -1,5 +1,0 @@
-- The store sets the project on the invoice for a year and month, keeps the identifier, weeks, and total, reports a not-found error when the month holds no invoice, and leaves the invoice unchanged when the write fails.
-- The invoice detail shows the project in a text input with a Save button that posts one `project` field to the detail path, and an invoice with no project shows an empty input.
-- A POST to the invoice detail path trims the project, saves it, and redirects with 303 to the detail page, an empty value clears the project, an unknown or invalid month returns 404, a failed save returns 500, and a POST without a session goes to sign-in and then back to the detail page without saving.
-- Automated tests cover changing, clearing, and trimming the project, the 404 for a missing invoice, and edits by both roles.
-- The README documents that signed-in users can change an invoice's project from its detail page.
