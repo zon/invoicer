@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -31,7 +33,7 @@ type WebOptions struct {
 
 // Run executes the web subcommand.
 func (c *WebCmd) Run() error {
-	return c.run("")
+	return c.run("", os.Stdout)
 }
 
 // listenAndServe starts the HTTP server. Tests replace it to inspect the
@@ -47,8 +49,8 @@ var notifyContext = signal.NotifyContext
 // shutdownTimeout limits how long an interrupt waits for requests to finish.
 const shutdownTimeout = 10 * time.Second
 
-// run executes web with an explicit config path.
-func (c *WebCmd) run(configPath string) error {
+// run executes web with an explicit config path and output writer.
+func (c *WebCmd) run(configPath string, out io.Writer) error {
 	opts, err := c.resolveOptions(configPath)
 	if err != nil {
 		return err
@@ -63,7 +65,21 @@ func (c *WebCmd) run(configPath string) error {
 	ctx, stop := notifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	fmt.Fprintf(out, "invoicer web ready at %s\n", localURL(opts.Address))
 	return serve(ctx, &http.Server{Addr: opts.Address, Handler: web.New(s)})
+}
+
+// localURL returns the URL for a listen address, using localhost for
+// addresses that listen on every interface.
+func localURL(address string) string {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return "http://" + address + "/"
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "localhost"
+	}
+	return "http://" + net.JoinHostPort(host, port) + "/"
 }
 
 // serve runs the server until ctx is cancelled, then shuts it down gracefully.

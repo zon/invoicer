@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -437,7 +439,7 @@ func TestWebRunServesInvoicesFromResolvedDatabase(t *testing.T) {
 	configPath := writeTestConfig(t, "database: "+dbPath+"\n")
 	cmd := &WebCmd{Address: "127.0.0.1:9000"}
 
-	if err := cmd.run(configPath); err != nil {
+	if err := cmd.run(configPath, io.Discard); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	if gotAddress != "127.0.0.1:9000" {
@@ -445,6 +447,37 @@ func TestWebRunServesInvoicesFromResolvedDatabase(t *testing.T) {
 	}
 	if !strings.Contains(gotBody, "Acme Corp") {
 		t.Error("served page does not list the stored invoice")
+	}
+}
+
+func TestWebRunReportsReadyURL(t *testing.T) {
+	original := listenAndServe
+	defer func() { listenAndServe = original }()
+
+	listenAndServe = func(*http.Server) error { return nil }
+
+	cases := []struct {
+		address string
+		want    string
+	}{
+		{":8080", "invoicer web ready at http://localhost:8080/\n"},
+		{"127.0.0.1:9000", "invoicer web ready at http://127.0.0.1:9000/\n"},
+		{"0.0.0.0:9000", "invoicer web ready at http://localhost:9000/\n"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.address, func(t *testing.T) {
+			dbPath := filepath.Join(t.TempDir(), "invoices.db")
+			configPath := writeTestConfig(t, "database: "+dbPath+"\n")
+
+			var out bytes.Buffer
+			if err := (&WebCmd{Address: tc.address}).run(configPath, &out); err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			if got := out.String(); got != tc.want {
+				t.Errorf("output: got %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -473,7 +506,7 @@ func TestWebRunStopsOnInterrupt(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- (&WebCmd{Address: "127.0.0.1:9000"}).run(configPath)
+		done <- (&WebCmd{Address: "127.0.0.1:9000"}).run(configPath, io.Discard)
 	}()
 
 	select {
@@ -510,7 +543,7 @@ func TestWebRunReportsDatabaseOpenError(t *testing.T) {
 	}
 
 	configPath := filepath.Join(t.TempDir(), "nonexistent.yaml")
-	err := (&WebCmd{Database: filepath.Join(notADirectory, "invoices.db")}).run(configPath)
+	err := (&WebCmd{Database: filepath.Join(notADirectory, "invoices.db")}).run(configPath, io.Discard)
 
 	if err == nil {
 		t.Fatal("run did not report the database error")
@@ -535,7 +568,7 @@ func TestWebRunReportsUnavailableAddress(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- (&WebCmd{Address: occupied.Addr().String(), Database: dbPath}).run(configPath)
+		done <- (&WebCmd{Address: occupied.Addr().String(), Database: dbPath}).run(configPath, io.Discard)
 	}()
 
 	select {

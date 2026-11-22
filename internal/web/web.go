@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -41,6 +42,12 @@ type Server struct {
 
 // New returns a server that lists invoices from s.
 func New(s Store) *Server {
+	// Gin defaults to debug mode, which logs every route on startup. Use
+	// release mode unless GIN_MODE asks for a different mode.
+	if os.Getenv(gin.EnvGinMode) == "" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	server := &Server{
 		Engine: gin.New(),
 		store:  s,

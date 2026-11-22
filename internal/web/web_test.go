@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"bytes"
 	"errors"
 	"html/template"
 	"net/http"
@@ -8,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/zon/invoicer/internal/invoice"
 	"github.com/zon/invoicer/internal/store"
@@ -30,6 +33,25 @@ func (f *fakeStore) GetByMonth(year int, month time.Month) (*invoice.Invoice, er
 		}
 	}
 	return nil, store.ErrNotFound
+}
+
+func TestNewDoesNotLogRoutesByDefault(t *testing.T) {
+	t.Setenv(gin.EnvGinMode, "")
+	gin.SetMode(gin.DebugMode)
+
+	var out bytes.Buffer
+	originalWriter := gin.DefaultWriter
+	gin.DefaultWriter = &out
+	defer func() {
+		gin.DefaultWriter = originalWriter
+		gin.SetMode(gin.ReleaseMode)
+	}()
+
+	web.New(&fakeStore{})
+
+	if out.Len() > 0 {
+		t.Errorf("New wrote startup logs: %q", out.String())
+	}
 }
 
 func get(t *testing.T, s web.Store, path string) *httptest.ResponseRecorder {

@@ -107,6 +107,8 @@ The app SHALL allow every request to read every invoice. It SHALL NOT require si
 
 The server SHALL serve pages, fragments, the stylesheet, and htmx from the binary. It SHALL need no support files beside the binary.
 
+When the server starts, the command SHALL print one line that gives the app's local URL as a link. It SHALL NOT print request logs, route lists, or framework diagnostics.
+
 The command SHALL report an error and exit non-zero when the database cannot open or the address cannot be used.
 
 An interrupt SHALL stop the server gracefully.
@@ -115,11 +117,13 @@ An interrupt SHALL stop the server gracefully.
 - GIVEN no address is passed
 - WHEN `invoicer web` starts
 - THEN the server listens on `:8080`
+- AND the command prints `invoicer web ready at http://localhost:8080/`
 
 #### Scenario: Custom address
 - GIVEN `--address 127.0.0.1:9000`
 - WHEN the server starts
 - THEN it listens on `127.0.0.1:9000`
+- AND the command prints `invoicer web ready at http://127.0.0.1:9000/`
 
 #### Scenario: Database flag wins
 - GIVEN a config database path
