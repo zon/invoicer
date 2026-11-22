@@ -314,8 +314,13 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 	}{
 		{name: "missing issuer", change: func(opts *Options) { opts.Issuer = "" }},
 		{name: "missing client ID", change: func(opts *Options) { opts.ClientID = "" }},
+		{name: "missing client secret", change: func(opts *Options) { opts.ClientSecret = "" }},
 		{name: "missing base URL", change: func(opts *Options) { opts.BaseURL = "" }},
 		{name: "short cookie key", change: func(opts *Options) { opts.CookieKey = []byte("short") }},
+		{name: "relative base URL", change: func(opts *Options) { opts.BaseURL = "/invoices" }},
+		{name: "plain HTTP base URL", change: func(opts *Options) { opts.BaseURL = "http://invoices.example.com" }},
+		{name: "relative issuer", change: func(opts *Options) { opts.Issuer = "auth.example.com" }},
+		{name: "plain HTTP issuer", change: func(opts *Options) { opts.Issuer = "http://auth.example.com" }},
 	}
 
 	for _, tc := range cases {
@@ -347,6 +352,27 @@ func TestNewDefaultsGroupsAndClaim(t *testing.T) {
 	}
 	if a.groupsClaim != defaultGroupsClaim {
 		t.Errorf("groups claim: got %q, want %q", a.groupsClaim, defaultGroupsClaim)
+	}
+}
+
+func TestValidateAllowsLoopbackHTTP(t *testing.T) {
+	for _, baseURL := range []string{
+		"http://localhost:8080",
+		"http://127.0.0.1:8080",
+		"http://[::1]:8080",
+	} {
+		t.Run(baseURL, func(t *testing.T) {
+			opts := Options{
+				BaseURL:      baseURL,
+				Issuer:       baseURL,
+				ClientID:     "client",
+				ClientSecret: "secret",
+				CookieKey:    bytes.Repeat([]byte("k"), 32),
+			}
+			if err := opts.Validate(); err != nil {
+				t.Errorf("Validate: %v", err)
+			}
+		})
 	}
 }
 

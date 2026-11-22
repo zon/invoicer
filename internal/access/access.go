@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -78,7 +79,7 @@ type Access struct {
 // New discovers the provider at opts.Issuer and returns access control that
 // uses it.
 func New(ctx context.Context, opts Options) (*Access, error) {
-	if err := validateOptions(&opts); err != nil {
+	if err := opts.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -106,29 +107,60 @@ func New(ctx context.Context, opts Options) (*Access, error) {
 	}, nil
 }
 
-func validateOptions(opts *Options) error {
-	if opts.Issuer == "" {
-		return errors.New("OIDC issuer is required")
+// Validate reports a missing or invalid setting and applies the group and
+// claim defaults.
+func (o *Options) Validate() error {
+	if err := validateAddress("baseUrl", o.BaseURL); err != nil {
+		return err
 	}
-	if opts.ClientID == "" {
-		return errors.New("OIDC client ID is required")
+	if err := validateAddress("oidc.issuer", o.Issuer); err != nil {
+		return err
 	}
-	if opts.BaseURL == "" {
-		return errors.New("base URL is required")
+	if o.ClientID == "" {
+		return errors.New("oidc.clientId is required")
 	}
-	if len(opts.CookieKey) < 32 {
+	if o.ClientSecret == "" {
+		return errors.New("client secret is required")
+	}
+	if len(o.CookieKey) < 32 {
 		return errors.New("cookie key must hold at least 32 bytes")
 	}
-	if opts.AdminGroup == "" {
-		opts.AdminGroup = defaultAdminGroup
+	if o.AdminGroup == "" {
+		o.AdminGroup = defaultAdminGroup
 	}
-	if opts.CustomerGroup == "" {
-		opts.CustomerGroup = defaultCustomerGroup
+	if o.CustomerGroup == "" {
+		o.CustomerGroup = defaultCustomerGroup
 	}
-	if opts.GroupsClaim == "" {
-		opts.GroupsClaim = defaultGroupsClaim
+	if o.GroupsClaim == "" {
+		o.GroupsClaim = defaultGroupsClaim
 	}
 	return nil
+}
+
+func validateAddress(name, address string) error {
+	if address == "" {
+		return fmt.Errorf("%s is required", name)
+	}
+
+	parsed, err := url.Parse(address)
+	if err != nil || !parsed.IsAbs() || parsed.Host == "" {
+		return fmt.Errorf("%s must be an absolute HTTPS address", name)
+	}
+	if parsed.Scheme == "https" {
+		return nil
+	}
+	if parsed.Scheme == "http" && isLoopback(parsed.Hostname()) {
+		return nil
+	}
+	return fmt.Errorf("%s must use HTTPS unless the host is loopback", name)
+}
+
+func isLoopback(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func discover(ctx context.Context, issuer string) (*oidc.Provider, error) {

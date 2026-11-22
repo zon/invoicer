@@ -18,6 +18,22 @@ type Config struct {
 	Hours    float64 `yaml:"hours,omitempty"`
 	Project  string  `yaml:"project,omitempty"`
 	Database string  `yaml:"database,omitempty"`
+
+	// BaseURL is the public address of the web app.
+	BaseURL string `yaml:"baseUrl,omitempty"`
+	// OIDC holds the web app's access settings.
+	OIDC *OIDC `yaml:"oidc,omitempty"`
+}
+
+// OIDC holds the web app's OpenID Connect settings.
+type OIDC struct {
+	Issuer           string `yaml:"issuer,omitempty"`
+	ClientID         string `yaml:"clientId,omitempty"`
+	ClientSecretFile string `yaml:"clientSecretFile,omitempty"`
+	CookieKeyFile    string `yaml:"cookieKeyFile,omitempty"`
+	AdminGroup       string `yaml:"adminGroup,omitempty"`
+	CustomerGroup    string `yaml:"customerGroup,omitempty"`
+	GroupsClaim      string `yaml:"groupsClaim,omitempty"`
 }
 
 // DefaultPath returns the default path to the config file (~/.invoicer/config.yaml).

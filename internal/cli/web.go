@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/zon/invoicer/internal/access"
+	"github.com/zon/invoicer/internal/config"
 	"github.com/zon/invoicer/internal/store"
 	"github.com/zon/invoicer/internal/web"
 )
@@ -29,6 +31,7 @@ type WebCmd struct {
 type WebOptions struct {
 	Address  string
 	Database string
+	Access   access.Options
 }
 
 // Run executes the web subcommand.
@@ -123,7 +126,64 @@ func (c *WebCmd) resolveOptions(configPath string) (*WebOptions, error) {
 		return nil, err
 	}
 
-	return &WebOptions{Address: c.address(), Database: database}, nil
+	accessOptions, err := resolveAccessOptions(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &WebOptions{Address: c.address(), Database: database, Access: accessOptions}, nil
+}
+
+// resolveAccessOptions reads the web app's access settings and the secrets
+// they name.
+func resolveAccessOptions(cfg *config.Config) (access.Options, error) {
+	if cfg.OIDC == nil {
+		return access.Options{}, errors.New("oidc settings are required in the config file")
+	}
+
+	opts := access.Options{
+		BaseURL:       cfg.BaseURL,
+		Issuer:        cfg.OIDC.Issuer,
+		ClientID:      cfg.OIDC.ClientID,
+		AdminGroup:    cfg.OIDC.AdminGroup,
+		CustomerGroup: cfg.OIDC.CustomerGroup,
+		GroupsClaim:   cfg.OIDC.GroupsClaim,
+	}
+
+	secret, err := readAccessFile("oidc.clientSecretFile", cfg.OIDC.ClientSecretFile)
+	if err != nil {
+		return access.Options{}, err
+	}
+	if len(secret) == 0 {
+		return access.Options{}, fmt.Errorf("oidc.clientSecretFile is empty: %q", cfg.OIDC.ClientSecretFile)
+	}
+	opts.ClientSecret = string(secret)
+
+	key, err := readAccessFile("oidc.cookieKeyFile", cfg.OIDC.CookieKeyFile)
+	if err != nil {
+		return access.Options{}, err
+	}
+	if len(key) < 32 {
+		return access.Options{}, fmt.Errorf("oidc.cookieKeyFile must hold at least 32 bytes: %q", cfg.OIDC.CookieKeyFile)
+	}
+	opts.CookieKey = key
+
+	if err := opts.Validate(); err != nil {
+		return access.Options{}, err
+	}
+	return opts, nil
+}
+
+// readAccessFile reads a file named by an access setting.
+func readAccessFile(setting, path string) ([]byte, error) {
+	if path == "" {
+		return nil, fmt.Errorf("%s is required", setting)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s %q: %w", setting, path, err)
+	}
+	return data, nil
 }
 
 func (c *WebCmd) address() string {
