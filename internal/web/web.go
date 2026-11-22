@@ -81,6 +81,7 @@ func New(s Store, a ...Access) *Server {
 	}
 	server.GET("/", server.index)
 	server.GET("/:year/:month", server.show)
+	server.GET("/:year/:month/pdf", server.downloadPDF)
 	server.POST("/:year/:month", server.updateProject)
 	server.POST("/:year/:month/paid", server.updatePaid)
 	return server
@@ -229,6 +230,36 @@ func (s *Server) show(c *gin.Context) {
 		Admin:   isAdmin(c),
 		Invoice: detail(inv),
 	})
+}
+
+func (s *Server) downloadPDF(c *gin.Context) {
+	year, month, ok := s.yearMonth(c)
+	if !ok {
+		return
+	}
+
+	inv, err := s.store.GetByMonth(year, month)
+	if errors.Is(err, store.ErrNotFound) {
+		s.notFound(c)
+		return
+	}
+	if err != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	data, err := renderInvoicePDF(inv)
+	if err != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", pdfFilename(year, month)))
+	c.Data(http.StatusOK, "application/pdf", data)
+}
+
+func pdfFilename(year int, month time.Month) string {
+	return fmt.Sprintf("invoice-%04d-%02d.pdf", year, int(month))
 }
 
 func (s *Server) updateProject(c *gin.Context) {
