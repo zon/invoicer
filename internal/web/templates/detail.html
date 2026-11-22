@@ -2,9 +2,7 @@
 <html lang="en">
 {{template "head" .}}
 <body>
-  <header>
-    <h1>Invoices</h1>
-  </header>
+  {{template "header" .}}
   <p class="back"><a href="/">&larr; Back to invoices</a></p>
   {{with .Invoice}}
   <section class="invoice-detail">

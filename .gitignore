@@ -4,4 +4,4 @@
 bin/
 invoices/
 tmp/
-build-errors.log
+*.log

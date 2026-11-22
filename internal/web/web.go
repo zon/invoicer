@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/zon/invoicer/internal/access"
 	"github.com/zon/invoicer/internal/invoice"
 	"github.com/zon/invoicer/internal/store"
 )
@@ -25,32 +27,56 @@ var templateFiles embed.FS
 //go:embed static/style.css
 var styleCSS []byte
 
+const userContextKey = "currentUser"
+
 // Store provides the invoices the web app reads.
 type Store interface {
 	List() ([]*invoice.Invoice, error)
 	GetByMonth(year int, month time.Month) (*invoice.Invoice, error)
 }
 
+// Access signs users in and reports the current user.
+type Access interface {
+	CurrentUser(*gin.Context) (*access.User, bool)
+	Login(*gin.Context)
+	Callback(*gin.Context)
+	Logout(*gin.Context)
+}
+
 // Server serves the invoice web app.
 type Server struct {
 	*gin.Engine
-	store Store
+	store  Store
+	access Access
 }
 
-// New returns a server that lists invoices from s.
-func New(s Store) *Server {
+// New returns a server that lists invoices from s. When a is provided, the
+// server also serves the sign-in, callback, and sign-out routes.
+func New(s Store, a ...Access) *Server {
 	// Gin defaults to debug mode, which logs every route on startup. Use
 	// release mode unless GIN_MODE asks for a different mode.
 	if os.Getenv(gin.EnvGinMode) == "" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	var auth Access
+	if len(a) > 0 {
+		auth = a[0]
+	}
+
 	server := &Server{
 		Engine: gin.New(),
 		store:  s,
+		access: auth,
 	}
 	server.SetHTMLTemplate(template.Must(template.ParseFS(templateFiles, "templates/*.html")))
+	server.Use(server.requireUser)
 	server.GET("/style.css", server.stylesheet)
+	if auth != nil {
+		server.GET("/login", auth.Login)
+		server.GET("/callback", auth.Callback)
+		server.GET("/logout", auth.Logout)
+	}
 	server.GET("/", server.index)
 	server.GET("/:year/:month", server.show)
 	return server
@@ -72,10 +98,12 @@ func (s *Server) Router() http.Handler {
 }
 
 type indexData struct {
+	User     *access.User
 	Invoices []invoiceRow
 }
 
 type detailData struct {
+	User    *access.User
 	Invoice *invoiceDetail
 }
 
@@ -108,6 +136,39 @@ func (s *Server) stylesheet(c *gin.Context) {
 	c.Data(http.StatusOK, "text/css; charset=utf-8", styleCSS)
 }
 
+// requireUser sends every request except the auth endpoints to sign-in when it
+// has no session. Without access configured the app serves every route without
+// sign-in.
+func (s *Server) requireUser(c *gin.Context) {
+	if s.access == nil {
+		c.Next()
+		return
+	}
+	switch c.Request.URL.Path {
+	case "/login", "/callback", "/logout":
+		c.Next()
+		return
+	}
+	user, ok := s.access.CurrentUser(c)
+	if !ok {
+		next := url.QueryEscape(c.Request.URL.RequestURI())
+		c.Redirect(http.StatusFound, "/login?next="+next)
+		c.Abort()
+		return
+	}
+	c.Set(userContextKey, user)
+	c.Next()
+}
+
+func currentUser(c *gin.Context) *access.User {
+	value, ok := c.Get(userContextKey)
+	if !ok {
+		return nil
+	}
+	user, _ := value.(*access.User)
+	return user
+}
+
 func (s *Server) index(c *gin.Context) {
 	invoices, err := s.store.List()
 	if err != nil {
@@ -116,6 +177,7 @@ func (s *Server) index(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "index.html", indexData{
+		User:     currentUser(c),
 		Invoices: rows(invoices),
 	})
 }
@@ -144,6 +206,7 @@ func (s *Server) show(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "detail.html", detailData{
+		User:    currentUser(c),
 		Invoice: detail(inv),
 	})
 }

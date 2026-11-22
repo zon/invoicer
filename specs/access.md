@@ -6,9 +6,9 @@ Sign-in and read access for the invoice web app. The app signs users in through 
 ## Requirements
 
 ### Requirement: Sign-In Required
-The app SHALL require a valid session for every page. A request without a session SHALL go to `/login` and SHALL return the user to the requested page after sign-in.
+The app SHALL require a valid session for every request except the auth endpoints `/login`, `/callback`, and `/logout`. A request without a session SHALL go to `/login` and SHALL return the user to the requested address after sign-in.
 
-The stylesheet SHALL NOT require a session.
+The stylesheet SHALL require a session too.
 
 #### Scenario: Page without a session
 - GIVEN a request without a session
@@ -23,7 +23,12 @@ The stylesheet SHALL NOT require a session.
 #### Scenario: Stylesheet without a session
 - GIVEN a request without a session
 - WHEN `/style.css` is requested
-- THEN the app returns the stylesheet
+- THEN the app sends the user to `/login`
+
+#### Scenario: Unknown address without a session
+- GIVEN a request without a session
+- WHEN an unknown address is requested
+- THEN the app sends the user to `/login`
 
 ### Requirement: Groups and Roles
 The app SHALL read group membership from the claim named by `oidc.groupsClaim`. Config SHALL name the admin group and the customer group.
@@ -73,7 +78,7 @@ The app SHALL keep the state, nonce, and PKCE verifier in a short-lived signed c
 ### Requirement: Sign-In Completion
 `/callback` SHALL check the state, exchange the code, and validate the ID token's issuer, audience, expiry, and nonce.
 
-The app SHALL require the email claim and SHALL reject an email the provider marks unverified.
+The app SHALL require the email claim and SHALL reject an email the provider marks unverified. When the provider marks the email unverified, the app SHALL say that the email is not verified.
 
 On success the app SHALL set the session and SHALL redirect to the address the user first asked for, or to `/`.
 
@@ -106,9 +111,10 @@ On success the app SHALL set the session and SHALL redirect to the address the u
 - WHEN `/callback` validates it
 - THEN the app sets no session
 - AND the app returns 401
+- AND the page says the email is not verified
 
 ### Requirement: Failed Sign-In
-A failed sign-in SHALL set no session and SHALL return 401 with a complete HTML page and a link to try again.
+A failed sign-in SHALL set no session and SHALL return 401 with a complete HTML page and a link to try again. The page SHALL say when the email is unverified.
 
 #### Scenario: Failed sign-in page
 - GIVEN a sign-in that fails
@@ -116,6 +122,11 @@ A failed sign-in SHALL set no session and SHALL return 401 with a complete HTML 
 - THEN the response is a complete HTML page
 - AND the page links to try again
 - AND the response sets no session
+
+#### Scenario: Unverified email page
+- GIVEN a sign-in rejected because the email is unverified
+- WHEN the app responds
+- THEN the page says the email is not verified
 
 ### Requirement: Session
 The session cookie SHALL hold the user's email, role, and expiry. The app SHALL encrypt and sign the cookie with the key from `oidc.cookieKeyFile`. The cookie SHALL be HttpOnly, Secure, and SameSite=Lax.
@@ -199,6 +210,13 @@ The callback address SHALL be `baseUrl` plus `/callback`.
 `oidc.adminGroup` SHALL default to `invoicer-admins`, `oidc.customerGroup` SHALL default to `invoicer-customers`, and `oidc.groupsClaim` SHALL default to `groups`.
 
 Startup SHALL fail with an error when a required setting is missing or invalid.
+
+A config with no `baseUrl` and no `oidc` section SHALL start the app without sign-in. This mode supports local development.
+
+#### Scenario: No access settings
+- GIVEN a config without `baseUrl` and `oidc`
+- WHEN `invoicer web` starts
+- THEN the app serves pages without sign-in
 
 #### Scenario: Missing client ID
 - GIVEN a config without `oidc.clientId`

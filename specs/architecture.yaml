@@ -1,3 +1,6 @@
+- path: internal/access
+  description: Manages sign-in and sessions through an OpenID Connect provider.
+
 - path: internal/cli
   description: Defines and runs the command-line commands.
 

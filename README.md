@@ -71,6 +71,8 @@ project: Website Redesign
 database: ~/.invoicer/invoices.db
 ```
 
+The web app also reads `baseUrl` and `oidc` settings from the same file, as [Access Settings](#access-settings) describes.
+
 ### `set config` Subcommand
 
 Use the `set config` subcommand to write options to the config file without editing it by hand. The command updates only the options you specify and leaves the others unchanged.
@@ -136,7 +138,7 @@ invoicer web [options]
 | `--address` | Address the server listens on. Defaults to `:8080`. |
 | `--database` | Path to the invoice database. Defaults to the config value, then `~/.invoicer/invoices.db`. |
 
-The server serves pages and the stylesheet from the binary, so it needs no support files. An interrupt stops the server gracefully.
+The server serves pages and the stylesheet from the binary, so it needs no support files. An interrupt stops the server gracefully. Without access settings in the config, the app starts without sign-in for local development. With access settings, the app needs a configured OpenID Connect provider and requires sign-in.
 
 ```bash
 # Serve the default database at http://localhost:8080/
@@ -145,6 +147,40 @@ invoicer web
 # Serve a different database on another address
 invoicer web --address 127.0.0.1:9000 --database ./work.db
 ```
+
+### Access Settings
+
+Set `baseUrl` and the `oidc` section in the config file:
+
+```yaml
+baseUrl: https://invoices.example.com
+oidc:
+  issuer: https://auth.example.com
+  clientId: invoicer
+  clientSecretFile: /run/secrets/oidc-client-secret
+  cookieKeyFile: /run/secrets/cookie-key
+  adminGroup: invoicer-admins
+  customerGroup: invoicer-customers
+  groupsClaim: groups
+```
+
+`baseUrl` is the public address of the app. `oidc.issuer` is the provider's issuer address. Both must be absolute HTTPS addresses. A loopback address may use HTTP. The callback address is `baseUrl` plus `/callback`.
+
+`oidc.clientId` is required. `oidc.clientSecretFile` names a readable, non-empty file, and `oidc.cookieKeyFile` names a readable file with at least 32 bytes. The app reads both once at startup.
+
+`oidc.adminGroup` defaults to `invoicer-admins`, `oidc.customerGroup` defaults to `invoicer-customers`, and `oidc.groupsClaim` defaults to `groups`.
+
+The app reads the provider's discovery document from `oidc.issuer` at startup. It stops with an error when the issuer is unreachable or the document lacks the authorization, token, or JWKS endpoints.
+
+### Sign-In
+
+Every page requires a session. A request without one goes to `/login`, which sends the browser to the provider's authorization endpoint. The app asks for the `openid`, `email`, `profile`, and `groups` scopes and uses the authorization code flow with PKCE.
+
+The provider returns the browser to `/callback`. The app checks the sign-in state and validates the ID token's issuer, audience, expiry, and nonce. It requires a verified email, then starts a 12 hour session and redirects to the page the user first asked for, or to `/`.
+
+Only a user in the admin group or the customer group may sign in. A user in both groups is an admin user. A failed sign-in sets no session and returns a page that links to try again.
+
+The session does not renew. A missing, expired, or invalid session goes to `/login`. Every page shows the signed-in email and a link to `/logout`, which clears the session and returns the user to `/login`.
 
 ## Database
 

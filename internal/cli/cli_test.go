@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -65,6 +66,39 @@ func writeTestConfig(t *testing.T, content string) string {
 		t.Fatalf("writing test config: %v", err)
 	}
 	return path
+}
+
+// writeAccessFiles creates the client secret and cookie key files that a web
+// access configuration names.
+func writeAccessFiles(t *testing.T) (secretPath, keyPath string) {
+	t.Helper()
+	dir := t.TempDir()
+	secretPath = filepath.Join(dir, "client-secret")
+	if err := os.WriteFile(secretPath, []byte("client-secret"), 0o600); err != nil {
+		t.Fatalf("writing client secret: %v", err)
+	}
+	keyPath = filepath.Join(dir, "cookie-key")
+	if err := os.WriteFile(keyPath, bytes.Repeat([]byte("k"), 32), 0o600); err != nil {
+		t.Fatalf("writing cookie key: %v", err)
+	}
+	return secretPath, keyPath
+}
+
+// accessYAML returns a valid web access configuration that names the given
+// secret files.
+func accessYAML(secretPath, keyPath string) string {
+	return accessYAMLWithIssuer("https://auth.example.com", secretPath, keyPath)
+}
+
+// accessYAMLWithIssuer returns a valid web access configuration for an issuer.
+func accessYAMLWithIssuer(issuer, secretPath, keyPath string) string {
+	return fmt.Sprintf(`baseUrl: https://invoices.example.com
+oidc:
+  issuer: %s
+  clientId: invoicer
+  clientSecretFile: %s
+  cookieKeyFile: %s
+`, issuer, secretPath, keyPath)
 }
 
 func TestResolveOptions_NoConfig(t *testing.T) {
@@ -357,7 +391,8 @@ func TestWebResolveOptions_Defaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DefaultDatabasePath: %v", err)
 	}
-	path := filepath.Join(t.TempDir(), "nonexistent.yaml")
+	secretPath, keyPath := writeAccessFiles(t)
+	path := writeTestConfig(t, accessYAML(secretPath, keyPath))
 	opts, err := (&WebCmd{}).resolveOptions(path)
 	if err != nil {
 		t.Fatalf("resolveOptions: %v", err)
@@ -368,10 +403,182 @@ func TestWebResolveOptions_Defaults(t *testing.T) {
 	if opts.Database != want {
 		t.Errorf("Database: got %q, want default %q", opts.Database, want)
 	}
+	if opts.Access.BaseURL != "https://invoices.example.com" {
+		t.Errorf("BaseURL: got %q", opts.Access.BaseURL)
+	}
+	if opts.Access.Issuer != "https://auth.example.com" {
+		t.Errorf("Issuer: got %q", opts.Access.Issuer)
+	}
+	if opts.Access.ClientID != "invoicer" {
+		t.Errorf("ClientID: got %q", opts.Access.ClientID)
+	}
+	if opts.Access.ClientSecret != "client-secret" {
+		t.Errorf("ClientSecret: got %q", opts.Access.ClientSecret)
+	}
+	if len(opts.Access.CookieKey) != 32 {
+		t.Errorf("CookieKey length: got %d, want 32", len(opts.Access.CookieKey))
+	}
+	if opts.Access.AdminGroup != "invoicer-admins" {
+		t.Errorf("AdminGroup: got %q, want default", opts.Access.AdminGroup)
+	}
+	if opts.Access.CustomerGroup != "invoicer-customers" {
+		t.Errorf("CustomerGroup: got %q, want default", opts.Access.CustomerGroup)
+	}
+	if opts.Access.GroupsClaim != "groups" {
+		t.Errorf("GroupsClaim: got %q, want default", opts.Access.GroupsClaim)
+	}
+}
+
+func TestWebResolveOptions_NoAccessSettings(t *testing.T) {
+	path := writeTestConfig(t, "database: /var/lib/invoicer/config.db\n")
+	opts, err := (&WebCmd{}).resolveOptions(path)
+	if err != nil {
+		t.Fatalf("resolveOptions: %v", err)
+	}
+	if opts.Access != nil {
+		t.Errorf("Access: got %+v, want nil", opts.Access)
+	}
+}
+
+func TestWebResolveOptions_AccessSettings(t *testing.T) {
+	secretPath, keyPath := writeAccessFiles(t)
+	path := writeTestConfig(t, accessYAML(secretPath, keyPath)+`  adminGroup: admins
+  customerGroup: customers
+  groupsClaim: roles
+`)
+	opts, err := (&WebCmd{}).resolveOptions(path)
+	if err != nil {
+		t.Fatalf("resolveOptions: %v", err)
+	}
+	if opts.Access.AdminGroup != "admins" {
+		t.Errorf("AdminGroup: got %q, want %q", opts.Access.AdminGroup, "admins")
+	}
+	if opts.Access.CustomerGroup != "customers" {
+		t.Errorf("CustomerGroup: got %q, want %q", opts.Access.CustomerGroup, "customers")
+	}
+	if opts.Access.GroupsClaim != "roles" {
+		t.Errorf("GroupsClaim: got %q, want %q", opts.Access.GroupsClaim, "roles")
+	}
+}
+
+func TestWebResolveOptions_InvalidAccessSettings(t *testing.T) {
+	secretPath, keyPath := writeAccessFiles(t)
+	valid := accessYAML(secretPath, keyPath)
+
+	emptySecret := filepath.Join(t.TempDir(), "empty-secret")
+	if err := os.WriteFile(emptySecret, nil, 0o600); err != nil {
+		t.Fatalf("writing empty client secret: %v", err)
+	}
+	shortKey := filepath.Join(t.TempDir(), "short-key")
+	if err := os.WriteFile(shortKey, bytes.Repeat([]byte("k"), 16), 0o600); err != nil {
+		t.Fatalf("writing short cookie key: %v", err)
+	}
+
+	cases := []struct {
+		name   string
+		config string
+		want   string
+	}{
+		{
+			name:   "missing OIDC settings",
+			config: "baseUrl: https://invoices.example.com\n",
+			want:   "oidc",
+		},
+		{
+			name:   "missing base URL",
+			config: strings.Replace(valid, "baseUrl: https://invoices.example.com\n", "", 1),
+			want:   "baseUrl is required",
+		},
+		{
+			name:   "invalid base URL",
+			config: strings.Replace(valid, "https://invoices.example.com", "invoices.example.com", 1),
+			want:   "baseUrl must be an absolute HTTPS address",
+		},
+		{
+			name:   "plain HTTP base URL",
+			config: strings.Replace(valid, "https://invoices.example.com", "http://invoices.example.com", 1),
+			want:   "baseUrl must use HTTPS",
+		},
+		{
+			name:   "missing issuer",
+			config: strings.Replace(valid, "  issuer: https://auth.example.com\n", "", 1),
+			want:   "oidc.issuer is required",
+		},
+		{
+			name:   "invalid issuer",
+			config: strings.Replace(valid, "https://auth.example.com", "auth.example.com", 1),
+			want:   "oidc.issuer must be an absolute HTTPS address",
+		},
+		{
+			name:   "plain HTTP issuer",
+			config: strings.Replace(valid, "https://auth.example.com", "http://auth.example.com", 1),
+			want:   "oidc.issuer must use HTTPS",
+		},
+		{
+			name:   "missing client ID",
+			config: strings.Replace(valid, "  clientId: invoicer\n", "", 1),
+			want:   "oidc.clientId is required",
+		},
+		{
+			name:   "missing client secret file",
+			config: strings.Replace(valid, "  clientSecretFile: "+secretPath+"\n", "", 1),
+			want:   "oidc.clientSecretFile is required",
+		},
+		{
+			name:   "unreadable client secret file",
+			config: strings.Replace(valid, secretPath, filepath.Join(t.TempDir(), "missing"), 1),
+			want:   "reading oidc.clientSecretFile",
+		},
+		{
+			name:   "empty client secret file",
+			config: strings.Replace(valid, secretPath, emptySecret, 1),
+			want:   "oidc.clientSecretFile is empty",
+		},
+		{
+			name:   "missing cookie key file",
+			config: strings.Replace(valid, "  cookieKeyFile: "+keyPath+"\n", "", 1),
+			want:   "oidc.cookieKeyFile is required",
+		},
+		{
+			name:   "unreadable cookie key file",
+			config: strings.Replace(valid, keyPath, filepath.Join(t.TempDir(), "missing"), 1),
+			want:   "reading oidc.cookieKeyFile",
+		},
+		{
+			name:   "short cookie key",
+			config: strings.Replace(valid, keyPath, shortKey, 1),
+			want:   "oidc.cookieKeyFile",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeTestConfig(t, tc.config)
+			_, err := (&WebCmd{}).resolveOptions(path)
+			if err == nil {
+				t.Fatal("resolveOptions did not report the invalid access setting")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error: got %q, want it to contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestWebResolveOptions_AllowsLoopbackHTTP(t *testing.T) {
+	secretPath, keyPath := writeAccessFiles(t)
+	content := strings.Replace(accessYAML(secretPath, keyPath), "https://invoices.example.com", "http://localhost:8080", 1)
+	content = strings.Replace(content, "https://auth.example.com", "http://127.0.0.1:9000", 1)
+
+	path := writeTestConfig(t, content)
+	if _, err := (&WebCmd{}).resolveOptions(path); err != nil {
+		t.Fatalf("resolveOptions rejected HTTP loopback addresses: %v", err)
+	}
 }
 
 func TestWebResolveOptions_DatabaseFlagOverridesConfig(t *testing.T) {
-	path := writeTestConfig(t, "database: /var/lib/invoicer/config.db\n")
+	secretPath, keyPath := writeAccessFiles(t)
+	path := writeTestConfig(t, "database: /var/lib/invoicer/config.db\n"+accessYAML(secretPath, keyPath))
 	opts, err := (&WebCmd{Database: "/tmp/flag.db"}).resolveOptions(path)
 	if err != nil {
 		t.Fatalf("resolveOptions: %v", err)
@@ -382,7 +589,8 @@ func TestWebResolveOptions_DatabaseFlagOverridesConfig(t *testing.T) {
 }
 
 func TestWebResolveOptions_DatabaseConfigFallback(t *testing.T) {
-	path := writeTestConfig(t, "database: /var/lib/invoicer/config.db\n")
+	secretPath, keyPath := writeAccessFiles(t)
+	path := writeTestConfig(t, "database: /var/lib/invoicer/config.db\n"+accessYAML(secretPath, keyPath))
 	opts, err := (&WebCmd{}).resolveOptions(path)
 	if err != nil {
 		t.Fatalf("resolveOptions: %v", err)
@@ -393,7 +601,8 @@ func TestWebResolveOptions_DatabaseConfigFallback(t *testing.T) {
 }
 
 func TestWebResolveOptions_CustomAddress(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "nonexistent.yaml")
+	secretPath, keyPath := writeAccessFiles(t)
+	path := writeTestConfig(t, accessYAML(secretPath, keyPath))
 	opts, err := (&WebCmd{Address: "127.0.0.1:9000"}).resolveOptions(path)
 	if err != nil {
 		t.Fatalf("resolveOptions: %v", err)
@@ -450,6 +659,43 @@ func TestWebRunServesInvoicesFromResolvedDatabase(t *testing.T) {
 	}
 }
 
+func TestWebRunRequiresSignInWithAccessSettings(t *testing.T) {
+	original := listenAndServe
+	defer func() { listenAndServe = original }()
+
+	var handler http.Handler
+	listenAndServe = func(server *http.Server) error {
+		handler = server.Handler
+		return nil
+	}
+
+	secretPath, keyPath := writeAccessFiles(t)
+	stub := newDiscoveryStub(t)
+	configPath := writeTestConfig(t, "database: "+filepath.Join(t.TempDir(), "invoices.db")+"\n"+accessYAMLWithIssuer(stub.server.URL, secretPath, keyPath))
+
+	if err := (&WebCmd{}).run(configPath, io.Discard); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	page := httptest.NewRecorder()
+	handler.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/", nil))
+	if page.Code != http.StatusFound {
+		t.Fatalf("page status: got %d, want %d", page.Code, http.StatusFound)
+	}
+	if location := page.Header().Get("Location"); location != "/login?next=%2F" {
+		t.Errorf("page location: got %q, want %q", location, "/login?next=%2F")
+	}
+
+	stylesheet := httptest.NewRecorder()
+	handler.ServeHTTP(stylesheet, httptest.NewRequest(http.MethodGet, "/style.css", nil))
+	if stylesheet.Code != http.StatusFound {
+		t.Errorf("stylesheet status: got %d, want %d", stylesheet.Code, http.StatusFound)
+	}
+	if location := stylesheet.Header().Get("Location"); location != "/login?next=%2Fstyle.css" {
+		t.Errorf("stylesheet location: got %q, want %q", location, "/login?next=%2Fstyle.css")
+	}
+}
+
 func TestWebRunReportsReadyURL(t *testing.T) {
 	original := listenAndServe
 	defer func() { listenAndServe = original }()
@@ -468,7 +714,9 @@ func TestWebRunReportsReadyURL(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.address, func(t *testing.T) {
 			dbPath := filepath.Join(t.TempDir(), "invoices.db")
-			configPath := writeTestConfig(t, "database: "+dbPath+"\n")
+			secretPath, keyPath := writeAccessFiles(t)
+			stub := newDiscoveryStub(t)
+			configPath := writeTestConfig(t, "database: "+dbPath+"\n"+accessYAMLWithIssuer(stub.server.URL, secretPath, keyPath))
 
 			var out bytes.Buffer
 			if err := (&WebCmd{Address: tc.address}).run(configPath, &out); err != nil {
@@ -481,9 +729,151 @@ func TestWebRunReportsReadyURL(t *testing.T) {
 	}
 }
 
+func TestWebRunStartsWithoutAccessSettings(t *testing.T) {
+	original := listenAndServe
+	defer func() { listenAndServe = original }()
+
+	started := false
+	listenAndServe = func(*http.Server) error {
+		started = true
+		return nil
+	}
+
+	configPath := writeTestConfig(t, "database: "+filepath.Join(t.TempDir(), "invoices.db")+"\n")
+	if err := (&WebCmd{}).run(configPath, io.Discard); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !started {
+		t.Error("server did not start without access settings")
+	}
+}
+
+func TestWebRunReportsInvalidAccessSettings(t *testing.T) {
+	original := listenAndServe
+	defer func() { listenAndServe = original }()
+
+	started := false
+	listenAndServe = func(*http.Server) error {
+		started = true
+		return nil
+	}
+
+	secretPath, keyPath := writeAccessFiles(t)
+	content := strings.Replace(accessYAML(secretPath, keyPath), "  clientId: invoicer\n", "", 1)
+	configPath := writeTestConfig(t, content)
+
+	err := (&WebCmd{}).run(configPath, io.Discard)
+	if err == nil {
+		t.Fatal("run did not report the missing client ID")
+	}
+	if !strings.Contains(err.Error(), "oidc.clientId") {
+		t.Errorf("error does not report the client ID: %v", err)
+	}
+	if started {
+		t.Error("server started with invalid access settings")
+	}
+}
+
+func TestWebRunDiscoversProviderAtStartup(t *testing.T) {
+	original := listenAndServe
+	defer func() { listenAndServe = original }()
+
+	started := false
+	listenAndServe = func(*http.Server) error {
+		started = true
+		return nil
+	}
+
+	stub := newDiscoveryStub(t)
+	secretPath, keyPath := writeAccessFiles(t)
+	configPath := writeTestConfig(t, "database: "+filepath.Join(t.TempDir(), "invoices.db")+"\n"+accessYAMLWithIssuer(stub.server.URL, secretPath, keyPath))
+
+	if err := (&WebCmd{}).run(configPath, io.Discard); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !started {
+		t.Error("server did not start after discovery")
+	}
+	if got := stub.requests.Load(); got != 1 {
+		t.Errorf("discovery requests: got %d, want 1", got)
+	}
+}
+
+func TestWebRunReportsUnreachableIssuer(t *testing.T) {
+	original := listenAndServe
+	defer func() { listenAndServe = original }()
+
+	started := false
+	listenAndServe = func(*http.Server) error {
+		started = true
+		return nil
+	}
+
+	stub := newDiscoveryStub(t)
+	issuer := stub.server.URL
+	stub.server.Close()
+
+	secretPath, keyPath := writeAccessFiles(t)
+	configPath := writeTestConfig(t, "database: "+filepath.Join(t.TempDir(), "invoices.db")+"\n"+accessYAMLWithIssuer(issuer, secretPath, keyPath))
+
+	err := (&WebCmd{}).run(configPath, io.Discard)
+	if err == nil {
+		t.Fatal("run did not report the unreachable issuer")
+	}
+	if !strings.Contains(err.Error(), "discovering OIDC provider") {
+		t.Errorf("error does not report provider discovery: %v", err)
+	}
+	if started {
+		t.Error("server started without discovering the provider")
+	}
+}
+
+func TestWebRunReportsMissingDiscoveryEndpoints(t *testing.T) {
+	cases := []struct {
+		endpoint string
+		want     string
+	}{
+		{"authorization_endpoint", "authorization endpoint"},
+		{"token_endpoint", "token endpoint"},
+		{"jwks_uri", "JWKS endpoint"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.endpoint, func(t *testing.T) {
+			original := listenAndServe
+			defer func() { listenAndServe = original }()
+
+			started := false
+			listenAndServe = func(*http.Server) error {
+				started = true
+				return nil
+			}
+
+			stub := newDiscoveryStub(t)
+			stub.metadata = map[string]any{tc.endpoint: ""}
+
+			secretPath, keyPath := writeAccessFiles(t)
+			configPath := writeTestConfig(t, "database: "+filepath.Join(t.TempDir(), "invoices.db")+"\n"+accessYAMLWithIssuer(stub.server.URL, secretPath, keyPath))
+
+			err := (&WebCmd{}).run(configPath, io.Discard)
+			if err == nil {
+				t.Fatalf("run did not report the missing %s", tc.endpoint)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error: got %q, want it to contain %q", err, tc.want)
+			}
+			if started {
+				t.Error("server started with an incomplete discovery document")
+			}
+		})
+	}
+}
+
 func TestWebRunStopsOnInterrupt(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "invoices.db")
-	configPath := writeTestConfig(t, "database: "+dbPath+"\n")
+	secretPath, keyPath := writeAccessFiles(t)
+	stub := newDiscoveryStub(t)
+	configPath := writeTestConfig(t, "database: "+dbPath+"\n"+accessYAMLWithIssuer(stub.server.URL, secretPath, keyPath))
 
 	originalListen := listenAndServe
 	defer func() { listenAndServe = originalListen }()
@@ -542,7 +932,9 @@ func TestWebRunReportsDatabaseOpenError(t *testing.T) {
 		t.Fatalf("writing file: %v", err)
 	}
 
-	configPath := filepath.Join(t.TempDir(), "nonexistent.yaml")
+	secretPath, keyPath := writeAccessFiles(t)
+	stub := newDiscoveryStub(t)
+	configPath := writeTestConfig(t, accessYAMLWithIssuer(stub.server.URL, secretPath, keyPath))
 	err := (&WebCmd{Database: filepath.Join(notADirectory, "invoices.db")}).run(configPath, io.Discard)
 
 	if err == nil {
@@ -564,7 +956,9 @@ func TestWebRunReportsUnavailableAddress(t *testing.T) {
 	defer occupied.Close()
 
 	dbPath := filepath.Join(t.TempDir(), "invoices.db")
-	configPath := filepath.Join(t.TempDir(), "nonexistent.yaml")
+	secretPath, keyPath := writeAccessFiles(t)
+	stub := newDiscoveryStub(t)
+	configPath := writeTestConfig(t, accessYAMLWithIssuer(stub.server.URL, secretPath, keyPath))
 
 	done := make(chan error, 1)
 	go func() {
