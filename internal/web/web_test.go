@@ -890,6 +890,74 @@ func TestPostPaidReportsSaveFailure(t *testing.T) {
 	}
 }
 
+func TestCustomerPostPaidReturnsForbidden(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		paid  bool
+		value string
+	}{
+		{"mark paid", false, "true"},
+		{"mark unpaid", true, "false"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stored := &invoice.Invoice{
+				Month:    time.October,
+				Year:     2027,
+				Customer: "Acme Corp",
+				Project:  "Website Redesign",
+				Rate:     100,
+				Paid:     tc.paid,
+				Weeks:    []invoice.Week{{Hours: 10}},
+			}
+			s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+			auth := signedInAs("customer", access.Customer)
+
+			recorder := postWithAccess(t, s, auth, "/2027/oct/paid", url.Values{"paid": {tc.value}})
+			if recorder.Code != http.StatusForbidden {
+				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusForbidden)
+			}
+			if stored.Paid != tc.paid {
+				t.Errorf("Paid: got %t, want %t", stored.Paid, tc.paid)
+			}
+			if stored.Project != "Website Redesign" {
+				t.Errorf("Project: got %q, want %q", stored.Project, "Website Redesign")
+			}
+			if len(stored.Weeks) != 1 || stored.Weeks[0].Hours != 10 {
+				t.Errorf("weeks changed: %+v", stored.Weeks)
+			}
+		})
+	}
+}
+
+func TestPostPaidWithoutSessionGoesToLogin(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Rate:     100,
+	}
+	s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+
+	recorder := postWithAccess(t, s, &fakeAccess{}, "/2027/oct/paid", url.Values{"paid": {"true"}})
+
+	if recorder.Code != http.StatusFound {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusFound)
+	}
+	location, err := url.Parse(recorder.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parsing redirect: %v", err)
+	}
+	if location.Path != "/login" {
+		t.Errorf("redirect path: got %q, want %q", location.Path, "/login")
+	}
+	if next := location.Query().Get("next"); next != "/2027/oct" {
+		t.Errorf("return page: got %q, want %q", next, "/2027/oct")
+	}
+	if stored.Paid {
+		t.Error("invoice is paid after a request without a session")
+	}
+}
+
 func TestDetailShowsProjectForm(t *testing.T) {
 	stored := &invoice.Invoice{
 		Month:    time.October,

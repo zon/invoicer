@@ -159,13 +159,22 @@ func (s *Server) requireUser(c *gin.Context) {
 	}
 	user, ok := s.access.CurrentUser(c)
 	if !ok {
-		next := url.QueryEscape(c.Request.URL.RequestURI())
+		next := url.QueryEscape(signInTarget(c))
 		c.Redirect(http.StatusFound, "/login?next="+next)
 		c.Abort()
 		return
 	}
 	c.Set(userContextKey, user)
 	c.Next()
+}
+
+// signInTarget returns the page to open after sign-in. A paid POST targets a
+// route that serves no page, so it returns to the invoice detail instead.
+func signInTarget(c *gin.Context) string {
+	if c.Request.Method == http.MethodPost && strings.HasSuffix(c.Request.URL.Path, "/paid") {
+		return strings.TrimSuffix(c.Request.URL.Path, "/paid")
+	}
+	return c.Request.URL.RequestURI()
 }
 
 func currentUser(c *gin.Context) *access.User {
@@ -245,6 +254,11 @@ func (s *Server) updateProject(c *gin.Context) {
 }
 
 func (s *Server) updatePaid(c *gin.Context) {
+	if !isAdmin(c) {
+		c.Status(http.StatusForbidden)
+		return
+	}
+
 	year, month, ok := s.yearMonth(c)
 	if !ok {
 		return
