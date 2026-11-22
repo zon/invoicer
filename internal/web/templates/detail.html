@@ -23,7 +23,7 @@
       <dt>Rate</dt>
       <dd>{{.Rate}}</dd>
       <dt>Status</dt>
-      <dd>{{if .Paid}}Paid{{else}}Unpaid{{end}}</dd>
+      <dd>{{.Status}}</dd>
     </dl>
     {{if $.Admin}}
     <form class="paid-status" method="post" action="{{.PaidPath}}">

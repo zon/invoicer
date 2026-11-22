@@ -11,6 +11,7 @@
           <th>Month</th>
           <th>Year</th>
           <th>Project</th>
+          <th>Status</th>
           <th>Total</th>
         </tr>
       </thead>
@@ -21,11 +22,12 @@
           <td>{{.Month}}</td>
           <td>{{.Year}}</td>
           <td>{{.Project}}</td>
+          <td>{{.Status}}</td>
           <td>{{.Total}}</td>
         </tr>
         {{else}}
         <tr>
-          <td colspan="5">No invoices.</td>
+          <td colspan="6">No invoices.</td>
         </tr>
         {{end}}
       </tbody>

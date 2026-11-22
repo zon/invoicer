@@ -117,6 +117,7 @@ type invoiceRow struct {
 	Month    string
 	Year     int
 	Project  string
+	Status   string
 	Total    string
 	Path     string
 }
@@ -131,6 +132,7 @@ type invoiceDetail struct {
 	Total    string
 	Path     string
 	PaidPath string
+	Status   string
 	Paid     bool
 	Weeks    []weekRow
 }
@@ -330,6 +332,7 @@ func rows(invoices []*invoice.Invoice) []invoiceRow {
 			Month:    inv.Month.String(),
 			Year:     inv.Year,
 			Project:  inv.Project,
+			Status:   paidStatus(inv.Paid),
 			Total:    fmt.Sprintf("$%.2f", inv.Total()),
 			Path:     detailPath(inv.Year, inv.Month),
 		})
@@ -351,9 +354,17 @@ func detail(inv *invoice.Invoice) *invoiceDetail {
 		Total:    fmt.Sprintf("$%.2f", inv.Total()),
 		Path:     detailPath(inv.Year, inv.Month),
 		PaidPath: paidPath(inv.Year, inv.Month),
+		Status:   paidStatus(inv.Paid),
 		Paid:     inv.Paid,
 		Weeks:    weeks(inv.Weeks),
 	}
+}
+
+func paidStatus(paid bool) string {
+	if paid {
+		return "Paid"
+	}
+	return "Unpaid"
 }
 
 func weeks(items []invoice.Week) []weekRow {

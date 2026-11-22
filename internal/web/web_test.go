@@ -488,6 +488,57 @@ func TestListOmitsUnsetProject(t *testing.T) {
 	}
 }
 
+func TestListShowsPaidStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		paid bool
+		want string
+	}{
+		{"paid", true, "Paid"},
+		{"unpaid", false, "Unpaid"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stored := &invoice.Invoice{
+				Month:    time.October,
+				Year:     2027,
+				Customer: "Acme Corp",
+				Rate:     100,
+				Paid:     tc.paid,
+			}
+			s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+
+			list := get(t, s, "/").Body.String()
+			if !strings.Contains(list, "<th>Status</th>") {
+				t.Fatal("list does not have a Status column")
+			}
+			row := invoiceRowFor(t, list, "Acme Corp")
+			if !strings.Contains(row, "<td>"+tc.want+"</td>") {
+				t.Errorf("list row does not show %q", tc.want)
+			}
+
+			detail := get(t, s, "/2027/oct").Body.String()
+			if !strings.Contains(detail, "<dd>"+tc.want+"</dd>") {
+				t.Errorf("detail does not show %q", tc.want)
+			}
+		})
+	}
+}
+
+func invoiceRowFor(t *testing.T, body, customer string) string {
+	t.Helper()
+
+	at := strings.Index(body, customer)
+	if at < 0 {
+		t.Fatalf("body does not show %q", customer)
+	}
+	start := strings.LastIndex(body[:at], "<tr>")
+	end := strings.Index(body[at:], "</tr>")
+	if start < 0 || end < 0 {
+		t.Fatalf("body does not contain a row for %q", customer)
+	}
+	return body[start : at+end]
+}
+
 func TestListShowsEmptyList(t *testing.T) {
 	recorder := get(t, &fakeStore{}, "/")
 
