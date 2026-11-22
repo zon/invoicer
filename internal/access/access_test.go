@@ -409,6 +409,17 @@ func TestExpiredSessionCountsAsNoSession(t *testing.T) {
 	}
 }
 
+func TestMissingSessionCountsAsNoSession(t *testing.T) {
+	stub := newProviderStub(t)
+	router := testRouter(newTestAccess(t, stub))
+
+	whoami := perform(router, "/whoami")
+
+	if whoami.Code != http.StatusUnauthorized {
+		t.Errorf("status: got %d, want %d", whoami.Code, http.StatusUnauthorized)
+	}
+}
+
 func TestInvalidSessionCountsAsNoSession(t *testing.T) {
 	stub := newProviderStub(t)
 	a := newTestAccess(t, stub)
@@ -421,6 +432,48 @@ func TestInvalidSessionCountsAsNoSession(t *testing.T) {
 
 	if whoami.Code != http.StatusUnauthorized {
 		t.Errorf("status: got %d, want %d", whoami.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestSessionCookieIsEncryptedAndSigned(t *testing.T) {
+	stub := newProviderStub(t)
+	a := newTestAccess(t, stub)
+	router := testRouter(a)
+
+	authURL, signInCookie, _ := startSignIn(t, a, router, "/")
+	recorder := completeSignIn(t, stub, router, authURL, signInCookie, map[string]any{
+		"email":          "jane@example.com",
+		"email_verified": true,
+		"groups":         []string{"admins"},
+	})
+	cookie := findCookie(t, recorder, sessionCookieName)
+
+	decoded, err := base64.URLEncoding.DecodeString(cookieValue(t, cookie))
+	if err != nil {
+		t.Fatalf("decoding session cookie: %v", err)
+	}
+	for _, hidden := range []string{"jane@example.com", "admin", "customer"} {
+		if strings.Contains(string(decoded), hidden) {
+			t.Errorf("session cookie exposes %q", hidden)
+		}
+	}
+
+	tampered := *cookie
+	tampered.Value = tamper(cookieValue(t, cookie))
+	if whoami := performWithCookies(router, "/whoami", &tampered); whoami.Code != http.StatusUnauthorized {
+		t.Errorf("tampered session status: got %d, want %d", whoami.Code, http.StatusUnauthorized)
+	}
+
+	other := newTestAccessWith(t, stub, Options{
+		BaseURL:       "https://invoices.example.com",
+		ClientID:      "client",
+		ClientSecret:  "secret",
+		CookieKey:     bytes.Repeat([]byte("z"), 32),
+		AdminGroup:    "admins",
+		CustomerGroup: "customers",
+	})
+	if whoami := performWithCookies(testRouter(other), "/whoami", cookie); whoami.Code != http.StatusUnauthorized {
+		t.Errorf("session under another key status: got %d, want %d", whoami.Code, http.StatusUnauthorized)
 	}
 }
 
