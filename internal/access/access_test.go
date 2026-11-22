@@ -110,6 +110,15 @@ func tamper(value string) string {
 	return "A" + value[1:]
 }
 
+func tamperSignature(token string) string {
+	start := strings.LastIndex(token, ".") + 1
+	replacement := byte('A')
+	if token[start] == 'A' {
+		replacement = 'B'
+	}
+	return token[:start] + string(replacement) + token[start+1:]
+}
+
 func TestCallbackStartsSession(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -321,10 +330,11 @@ func assertNoSessionCookie(t *testing.T, recorder *httptest.ResponseRecorder) {
 
 func TestCallbackRejectsFailedSignIns(t *testing.T) {
 	cases := []struct {
-		name     string
-		claims   map[string]any
-		badState bool
-		nonce    string
+		name          string
+		claims        map[string]any
+		badState      bool
+		nonce         string
+		tamperedToken bool
 	}{
 		{
 			name:   "user in neither group",
@@ -360,11 +370,21 @@ func TestCallbackRejectsFailedSignIns(t *testing.T) {
 			name:   "expired token",
 			claims: map[string]any{"exp": time.Now().Add(-time.Hour).Unix(), "email": "jane@example.com", "email_verified": true, "groups": []string{"admins"}},
 		},
+		{
+			name:          "invalid signature",
+			claims:        map[string]any{"email": "jane@example.com", "email_verified": true, "groups": []string{"admins"}},
+			tamperedToken: true,
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			stub := newProviderStub(t)
+			if tc.tamperedToken {
+				stub.mu.Lock()
+				stub.tamperIDToken = true
+				stub.mu.Unlock()
+			}
 			a := newTestAccess(t, stub)
 			router := testRouter(a)
 
@@ -379,8 +399,14 @@ func TestCallbackRejectsFailedSignIns(t *testing.T) {
 				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusUnauthorized)
 			}
 			body := recorder.Body.String()
-			if !strings.HasPrefix(body, "<!doctype html>") || !strings.Contains(body, `href="/login"`) {
-				t.Errorf("failed sign-in is not a complete page linking to /login: %q", body)
+			if !strings.HasPrefix(body, "<!doctype html>") || !strings.HasSuffix(strings.TrimSpace(body), "</html>") {
+				t.Errorf("failed sign-in is not a complete HTML page: %q", body)
+			}
+			if !strings.Contains(body, `href="/login"`) || !strings.Contains(body, "Try again") {
+				t.Errorf("failed sign-in does not link to try again: %q", body)
+			}
+			if contentType := recorder.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "text/html") {
+				t.Errorf("failed sign-in content type: got %q, want HTML", contentType)
 			}
 			assertNoSessionCookie(t, recorder)
 		})
@@ -739,11 +765,12 @@ type providerStub struct {
 	key      *rsa.PrivateKey
 	metadata map[string]any
 
-	mu           sync.Mutex
-	nonce        string
-	claims       map[string]any
-	tokenStatus  int
-	tokenIDToken bool
+	mu            sync.Mutex
+	nonce         string
+	claims        map[string]any
+	tokenStatus   int
+	tokenIDToken  bool
+	tamperIDToken bool
 }
 
 func newProviderStub(t *testing.T) *providerStub {
@@ -812,6 +839,7 @@ func (p *providerStub) token(w http.ResponseWriter, r *http.Request) {
 	p.mu.Lock()
 	status := p.tokenStatus
 	includeIDToken := p.tokenIDToken
+	tamperIDToken := p.tamperIDToken
 	claims := map[string]any{
 		"iss":   p.server.URL,
 		"aud":   "client",
@@ -834,7 +862,11 @@ func (p *providerStub) token(w http.ResponseWriter, r *http.Request) {
 		"token_type":   "Bearer",
 	}
 	if includeIDToken {
-		response["id_token"] = p.sign(claims)
+		idToken := p.sign(claims)
+		if tamperIDToken {
+			idToken = tamperSignature(idToken)
+		}
+		response["id_token"] = idToken
 	}
 
 	w.Header().Set("Content-Type", "application/json")
