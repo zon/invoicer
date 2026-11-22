@@ -13,15 +13,32 @@ spec:
       {{- include "invoicer.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
       labels:
         {{- include "invoicer.selectorLabels" . | nindent 8 }}
     spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
         - name: web
           image: {{ include "invoicer.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
             - web
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+          securityContext:
+            readOnlyRootFilesystem: true
           volumeMounts:
             - name: config
               mountPath: /home/invoicer/.invoicer/config.yaml

@@ -577,6 +577,70 @@ func TestDeploymentRecreateStrategy(t *testing.T) {
 	equal(t, "strategy.type", strategy["type"], "Recreate")
 }
 
+func TestWebContainerPortAndProbes(t *testing.T) {
+	container := webContainer(t, renderChart(t))
+
+	ports, _ := container["ports"].([]any)
+	if len(ports) != 1 {
+		t.Fatalf("container exposes %d ports, want one", len(ports))
+	}
+	assertPort(t, "containerPort", ports[0].(map[string]any), "containerPort", 8080)
+
+	for _, name := range []string{"readinessProbe", "livenessProbe"} {
+		probe, ok := container[name].(map[string]any)
+		if !ok {
+			t.Fatalf("container has no %s", name)
+		}
+		socket, ok := probe["tcpSocket"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s is not a TCP probe", name)
+		}
+		assertPort(t, name, socket, "port", 8080)
+	}
+}
+
+func assertPort(t *testing.T, name string, source map[string]any, key string, want int) {
+	t.Helper()
+	port, ok := source[key].(int)
+	if !ok || port != want {
+		t.Fatalf("%s: got %v, want %d", name, source[key], want)
+	}
+}
+
+func TestWebPodSecurityContext(t *testing.T) {
+	manifests := renderChart(t)
+	podSpec := deploymentPodSpec(t, manifests)
+
+	security, _ := podSpec["securityContext"].(map[string]any)
+	equal(t, "runAsUser", security["runAsUser"], 1000)
+	equal(t, "runAsGroup", security["runAsGroup"], 1000)
+	equal(t, "fsGroup", security["fsGroup"], 1000)
+
+	containerSecurity, _ := webContainer(t, manifests)["securityContext"].(map[string]any)
+	equal(t, "readOnlyRootFilesystem", containerSecurity["readOnlyRootFilesystem"], true)
+}
+
+func TestDeploymentRestartsWhenConfigChanges(t *testing.T) {
+	annotations := func(manifests []map[string]any) map[string]any {
+		t.Helper()
+		deployment := findKind(t, manifests, "Deployment")
+		template := deployment["spec"].(map[string]any)["template"].(map[string]any)
+		result, _ := template["metadata"].(map[string]any)["annotations"].(map[string]any)
+		return result
+	}
+
+	before := annotations(renderChart(t))
+	checksum, _ := before["checksum/config"].(string)
+	if checksum == "" {
+		t.Fatal("pod template has no config checksum annotation")
+	}
+
+	after := annotations(renderChart(t, "--set", "config.vendor=Grace Hopper"))
+	if after["checksum/config"] == checksum {
+		t.Fatal("config checksum does not change with the config")
+	}
+}
+
 func TestHelmLintAndTemplate(t *testing.T) {
 	helm, err := exec.LookPath("helm")
 	if err != nil {
