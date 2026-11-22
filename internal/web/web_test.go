@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -517,6 +518,71 @@ func TestDetailShowsFullPageWithBackLink(t *testing.T) {
 	}
 }
 
+var (
+	formPattern  = regexp.MustCompile(`(?s)<form\b.*?</form>`)
+	inputPattern = regexp.MustCompile(`<input\b[^>]*>`)
+)
+
+func projectForm(t *testing.T, body string) string {
+	t.Helper()
+
+	for _, form := range formPattern.FindAllString(body, -1) {
+		if strings.Contains(form, `name="project"`) {
+			return form
+		}
+	}
+	t.Fatal("detail does not contain a project form")
+	return ""
+}
+
+func projectInput(t *testing.T, form string) string {
+	t.Helper()
+
+	input := inputPattern.FindString(form)
+	if input == "" {
+		t.Fatal("project form does not contain an input")
+	}
+	return input
+}
+
+func TestDetailShowsProjectForm(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Project:  "Website Redesign",
+		Rate:     100,
+	}
+
+	recorder := get(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, "/2027/oct")
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
+	}
+
+	form := projectForm(t, recorder.Body.String())
+	opening := form[:strings.Index(form, ">")+1]
+	for _, want := range []string{`method="post"`, `action="/2027/oct"`} {
+		if !strings.Contains(opening, want) {
+			t.Errorf("form does not contain %q", want)
+		}
+	}
+
+	if count := strings.Count(form, `name="project"`); count != 1 {
+		t.Errorf("form posts %d project fields, want 1", count)
+	}
+
+	input := projectInput(t, form)
+	for _, want := range []string{`type="text"`, `name="project"`, `value="Website Redesign"`} {
+		if !strings.Contains(input, want) {
+			t.Errorf("project input does not contain %q", want)
+		}
+	}
+
+	if !strings.Contains(form, "Save") {
+		t.Error("form does not have a Save button")
+	}
+}
+
 func TestDetailReturnsNotFound(t *testing.T) {
 	stored := &invoice.Invoice{
 		Month:    time.October,
@@ -640,8 +706,12 @@ func TestDetailOmitsUnsetProject(t *testing.T) {
 	if !strings.Contains(body, "Acme Corp") {
 		t.Error("detail does not contain the customer")
 	}
-	if strings.Contains(body, "Project") {
-		t.Error("detail contains a project label that is not set")
+	if strings.Contains(body, "<dt>Project</dt>") {
+		t.Error("detail contains a project entry that is not set")
+	}
+	input := projectInput(t, projectForm(t, body))
+	if !strings.Contains(input, `value=""`) {
+		t.Errorf("project input is not empty: %s", input)
 	}
 }
 

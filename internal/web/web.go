@@ -124,6 +124,7 @@ type invoiceDetail struct {
 	Year     int
 	Rate     string
 	Total    string
+	Path     string
 	Weeks    []weekRow
 }
 
@@ -250,6 +251,7 @@ func detail(inv *invoice.Invoice) *invoiceDetail {
 		Year:     inv.Year,
 		Rate:     fmt.Sprintf("$%.2f", inv.Rate),
 		Total:    fmt.Sprintf("$%.2f", inv.Total()),
+		Path:     detailPath(inv.Year, inv.Month),
 		Weeks:    weeks(inv.Weeks),
 	}
 }

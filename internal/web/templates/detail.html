@@ -23,6 +23,11 @@
       <dt>Rate</dt>
       <dd>{{.Rate}}</dd>
     </dl>
+    <form class="project-edit" method="post" action="{{.Path}}">
+      <label for="project">Project</label>
+      <input id="project" type="text" name="project" value="{{.Project}}">
+      <button type="submit">Save</button>
+    </form>
     <table class="weeks">
       <caption>Weekly line items</caption>
       <thead>
