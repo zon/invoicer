@@ -641,6 +641,42 @@ func TestDeploymentRestartsWhenConfigChanges(t *testing.T) {
 	}
 }
 
+func assertService(t *testing.T, manifests []map[string]any, port int) {
+	t.Helper()
+	service := findKind(t, manifests, "Service")
+	spec := service["spec"].(map[string]any)
+
+	equal(t, "service type", spec["type"], "ClusterIP")
+
+	ports, _ := spec["ports"].([]any)
+	if len(ports) != 1 {
+		t.Fatalf("service exposes %d ports, want one", len(ports))
+	}
+	servicePort := ports[0].(map[string]any)
+	assertPort(t, "service port", servicePort, "port", port)
+	assertPort(t, "service targetPort", servicePort, "targetPort", 8080)
+
+	selector, _ := spec["selector"].(map[string]any)
+	deployment := findKind(t, manifests, "Deployment")
+	labels, _ := deployment["spec"].(map[string]any)["template"].(map[string]any)["metadata"].(map[string]any)["labels"].(map[string]any)
+	for key, value := range selector {
+		if labels[key] != value {
+			t.Fatalf("service selector %s: got %v, want %v", key, value, labels[key])
+		}
+	}
+	if len(selector) == 0 {
+		t.Fatal("service has no selector")
+	}
+}
+
+func TestServiceForwardsToWebPort(t *testing.T) {
+	assertService(t, renderChart(t), 80)
+}
+
+func TestServiceUsesValues(t *testing.T) {
+	assertService(t, renderChart(t, "--set", "service.port=8088"), 8088)
+}
+
 func TestHelmLintAndTemplate(t *testing.T) {
 	helm, err := exec.LookPath("helm")
 	if err != nil {
