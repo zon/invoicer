@@ -4,7 +4,7 @@ High level objectives. Work through them in order. See [process](zpecs/process.m
 
 ## OIDC access control
 
-The web app signs users in with OIDC. Users in the admin group read every invoice. Customer users read the customer's invoices. The web app rejects requests without a valid session. With one customer, the app needs no group-to-customer mapping.
+The web app signs users in with OIDC. Users in the admin group and the customer group read every invoice. The web app rejects requests without a valid session. With one customer, the app needs no group-to-customer mapping.
 
 ## Customer project edits
 

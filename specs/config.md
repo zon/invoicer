@@ -1,7 +1,7 @@
 # Config Specification
 
 ## Purpose
-The YAML config file at `~/.invoicer/config.yaml` stores user defaults for invoice generation.
+The YAML config file at `~/.invoicer/config.yaml` stores user defaults for invoice generation. The web app also reads its access settings from the same file, as [Access](access.md) describes.
 
 ## Requirements
 
@@ -11,6 +11,8 @@ The config SHALL hold `vendor`, `customer`, `project`, `rate`, `hours`, and `dat
 `database` SHALL default to `~/.invoicer/invoices.db`. The other values SHALL have no default. Generate SHALL require `vendor`, `customer`, `rate`, and `hours` from a flag or config. `project` MAY be empty.
 
 The system SHALL ignore `pdf` and `model` keys in a config file.
+
+The web app SHALL also read `baseUrl` and the `oidc` settings from the same file, as [Access](access.md#requirement-access-configuration) describes. The other commands SHALL ignore those settings.
 
 #### Scenario: Config supplies required values
 - GIVEN a config with vendor, customer, rate, and hours
@@ -26,6 +28,11 @@ The system SHALL ignore `pdf` and `model` keys in a config file.
 - GIVEN a config with `pdf: true` and `model: deepseek/deepseek-flash`
 - WHEN generate runs
 - THEN neither value affects the invoice
+
+#### Scenario: CLI ignores access settings
+- GIVEN a config with `baseUrl` and `oidc` settings
+- WHEN generate runs
+- THEN the access settings do not affect the invoice
 
 ### Requirement: Value Order
 Generate SHALL resolve values in this order, highest first: command-line flags, config values, built-in defaults. A flag SHALL win over the matching config value.

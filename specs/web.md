@@ -79,12 +79,17 @@ The app SHALL escape stored values in every response. It SHALL never render an i
 - AND the browser runs no script
 
 ### Requirement: Read Access
-The app SHALL allow every request to read every invoice. It SHALL NOT require sign-in and SHALL NOT change stored invoices.
+The app SHALL require a valid session for every page and SHALL allow every signed-in user to read every invoice. It SHALL NOT change stored invoices. Sign-in, roles, sessions, and access configuration SHALL follow [Access](access.md).
 
-#### Scenario: No sign-in
-- GIVEN a request without a session
+#### Scenario: Signed-in user reads the list
+- GIVEN a signed-in admin or customer user
 - WHEN `/` is requested
 - THEN the app returns the invoice list
+
+#### Scenario: No session
+- GIVEN a request without a session
+- WHEN `/` is requested
+- THEN the app sends the user to `/login`
 
 ### Requirement: Web Command
 `invoicer web` SHALL start the web server. The database path SHALL come from `--database`, then the `database` config value, then the default, as [Database Location](config.md#requirement-database-location) describes. `--address` SHALL set the listen address and SHALL default to `:8080`.
@@ -115,7 +120,7 @@ An interrupt SHALL stop the server gracefully.
 - THEN the app lists invoices from the flag path
 
 #### Scenario: Binary needs no support files
-- GIVEN the binary alone in an empty directory
+- GIVEN the binary alone in an empty directory and a valid access configuration
 - WHEN the server starts
 - THEN pages and the stylesheet load
 
