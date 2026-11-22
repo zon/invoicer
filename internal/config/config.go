@@ -19,15 +19,33 @@ type Config struct {
 	PDF      *bool   `yaml:"pdf,omitempty"`
 	Model    string  `yaml:"model,omitempty"`
 	Project  string  `yaml:"project,omitempty"`
+	Database string  `yaml:"database,omitempty"`
 }
 
 // DefaultPath returns the default path to the config file (~/.invoicer/config.yaml).
 func DefaultPath() (string, error) {
+	dir, err := defaultDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "config.yaml"), nil
+}
+
+// DefaultDatabasePath returns the default path to the invoice database (~/.invoicer/invoices.db).
+func DefaultDatabasePath() (string, error) {
+	dir, err := defaultDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "invoices.db"), nil
+}
+
+func defaultDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("could not determine home directory: %w", err)
 	}
-	return filepath.Join(home, ".invoicer", "config.yaml"), nil
+	return filepath.Join(home, ".invoicer"), nil
 }
 
 // Load reads the config file at the given path.
@@ -79,6 +97,9 @@ func Save(path string, updates *Config) error {
 	}
 	if updates.Project != "" {
 		existing.Project = updates.Project
+	}
+	if updates.Database != "" {
+		existing.Database = updates.Database
 	}
 
 	// Ensure the directory exists.

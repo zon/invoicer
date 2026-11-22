@@ -24,6 +24,9 @@ type SetConfigCmd struct {
 	// Project is an optional project name to annotate invoices with.
 	Project string `help:"Name of the project to annotate invoices with."`
 
+	// Database is the path to the invoice database.
+	Database string `help:"Path to the invoice database."`
+
 	// Rate is the hourly rate for the contractor.
 	Rate float64 `help:"Hourly rate in dollars."`
 
@@ -63,6 +66,7 @@ func RunSetConfig(s *SetConfigCmd, path string) error {
 		PDF:      s.PDF,
 		Model:    s.Model,
 		Project:  s.Project,
+		Database: s.Database,
 	}
 
 	if err := config.Save(path, updates); err != nil {

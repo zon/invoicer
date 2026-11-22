@@ -20,6 +20,7 @@ func TestRunSetConfig_CreatesConfig(t *testing.T) {
 		PDF:      boolPtr(true),
 		Model:    "deepseek/deepseek-flash",
 		Project:  "Test Project",
+		Database: "/var/lib/invoicer/invoices.db",
 	}
 
 	if err := RunSetConfig(cmd, path); err != nil {
@@ -51,6 +52,9 @@ func TestRunSetConfig_CreatesConfig(t *testing.T) {
 	if cfg.Project != "Test Project" {
 		t.Errorf("Project: got %q, want %q", cfg.Project, "Test Project")
 	}
+	if cfg.Database != "/var/lib/invoicer/invoices.db" {
+		t.Errorf("Database: got %q, want %q", cfg.Database, "/var/lib/invoicer/invoices.db")
+	}
 }
 
 func TestRunSetConfig_OnlyUpdatesSpecifiedFields(t *testing.T) {
@@ -62,6 +66,7 @@ func TestRunSetConfig_OnlyUpdatesSpecifiedFields(t *testing.T) {
 customer: Initial Customer
 rate: 80
 hours: 30
+database: /var/lib/invoicer/initial.db
 `
 	if err := os.WriteFile(path, []byte(initial), 0o600); err != nil {
 		t.Fatalf("writing initial config: %v", err)
@@ -91,6 +96,27 @@ hours: 30
 	}
 	if cfg.Hours != 30 {
 		t.Errorf("Hours: expected unchanged; got %v", cfg.Hours)
+	}
+	if cfg.Database != "/var/lib/invoicer/initial.db" {
+		t.Errorf("Database: expected unchanged; got %q", cfg.Database)
+	}
+}
+
+func TestRunSetConfig_WritesDatabase(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "subdir", "config.yaml")
+
+	cmd := &SetConfigCmd{Database: "/var/lib/invoicer/invoices.db"}
+	if err := RunSetConfig(cmd, path); err != nil {
+		t.Fatalf("RunSetConfig: %v", err)
+	}
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Database != "/var/lib/invoicer/invoices.db" {
+		t.Errorf("Database: got %q, want %q", cfg.Database, "/var/lib/invoicer/invoices.db")
 	}
 }
 

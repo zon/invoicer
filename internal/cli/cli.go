@@ -38,6 +38,9 @@ type GenerateCmd struct {
 	// Project is an optional project name to annotate the invoice with.
 	Project string `help:"Name of the project to annotate the invoice with."`
 
+	// Database is the path to the invoice database.
+	Database string `help:"Path to the invoice database. Defaults to ~/.invoicer/invoices.db."`
+
 	// Rate is the hourly rate for the contractor.
 	Rate float64 `short:"r" help:"Hourly rate in dollars. Required without config."`
 
@@ -115,6 +118,18 @@ func (c *GenerateCmd) resolveOptions(configPath string) (*ResolvedOptions, error
 		opts.Model = DefaultModel
 	}
 
+	// Merge database: CLI value takes precedence, then config, then the default.
+	opts.Database = c.Database
+	if opts.Database == "" {
+		opts.Database = cfg.Database
+	}
+	if opts.Database == "" {
+		opts.Database, err = config.DefaultDatabasePath()
+		if err != nil {
+			return nil, fmt.Errorf("determining default database path: %w", err)
+		}
+	}
+
 	return opts, nil
 }
 
@@ -129,6 +144,7 @@ type ResolvedOptions struct {
 	Hours    float64
 	PDF      bool
 	Model    string
+	Database string
 }
 
 // Run executes the generate subcommand (invoice generation).

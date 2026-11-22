@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/kong"
+	"github.com/zon/invoicer/internal/config"
 )
 
 func boolPtr(b bool) *bool { return &b }
@@ -221,5 +222,75 @@ hours: 20
 	}
 	if opts.Hours != 20 {
 		t.Errorf("Hours: expected config fallback; got %v", opts.Hours)
+	}
+}
+
+func TestResolveOptions_DatabaseFlagOverridesConfig(t *testing.T) {
+	path := writeTestConfig(t, "database: /var/lib/invoicer/config.db\n")
+	c := &GenerateCmd{Database: "/tmp/flag.db"}
+	opts, err := c.resolveOptions(path)
+	if err != nil {
+		t.Fatalf("resolveOptions: %v", err)
+	}
+	if opts.Database != "/tmp/flag.db" {
+		t.Errorf("Database: got %q, want CLI value", opts.Database)
+	}
+}
+
+func TestResolveOptions_DatabaseConfigFallback(t *testing.T) {
+	path := writeTestConfig(t, "database: /var/lib/invoicer/config.db\n")
+	opts, err := (&GenerateCmd{}).resolveOptions(path)
+	if err != nil {
+		t.Fatalf("resolveOptions: %v", err)
+	}
+	if opts.Database != "/var/lib/invoicer/config.db" {
+		t.Errorf("Database: got %q, want config value", opts.Database)
+	}
+}
+
+func TestResolveOptions_DefaultDatabase(t *testing.T) {
+	want, err := config.DefaultDatabasePath()
+	if err != nil {
+		t.Fatalf("DefaultDatabasePath: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "nonexistent.yaml")
+	opts, err := (&GenerateCmd{}).resolveOptions(path)
+	if err != nil {
+		t.Fatalf("resolveOptions: %v", err)
+	}
+	if opts.Database != want {
+		t.Errorf("Database: got %q, want default %q", opts.Database, want)
+	}
+}
+
+func TestCLIParsesDatabaseFlag(t *testing.T) {
+	var cmd CLI
+	p, err := kong.New(&cmd, kong.Name("invoicer"), kong.Exit(func(int) {}))
+	if err != nil {
+		t.Fatalf("kong.New failed: %v", err)
+	}
+	ctx, err := p.Parse([]string{"--database", "/tmp/invoices.db"})
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if !strings.Contains(ctx.Command(), "generate") {
+		t.Errorf("expected default command to be 'generate', got %q", ctx.Command())
+	}
+	if cmd.Generate.Database != "/tmp/invoices.db" {
+		t.Errorf("Generate.Database: got %q, want %q", cmd.Generate.Database, "/tmp/invoices.db")
+	}
+}
+
+func TestCLIParsesSetConfigDatabaseFlag(t *testing.T) {
+	var cmd CLI
+	p, err := kong.New(&cmd, kong.Name("invoicer"), kong.Exit(func(int) {}))
+	if err != nil {
+		t.Fatalf("kong.New failed: %v", err)
+	}
+	if _, err := p.Parse([]string{"set", "config", "--database", "/tmp/invoices.db"}); err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if cmd.Set.Config.Database != "/tmp/invoices.db" {
+		t.Errorf("Set.Config.Database: got %q, want %q", cmd.Set.Config.Database, "/tmp/invoices.db")
 	}
 }
