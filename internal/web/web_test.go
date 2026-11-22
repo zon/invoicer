@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/zon/invoicer/internal/invoice"
+	"github.com/zon/invoicer/internal/store"
 	"github.com/zon/invoicer/internal/web"
 )
 
@@ -19,6 +20,15 @@ type fakeStore struct {
 
 func (f *fakeStore) List() ([]*invoice.Invoice, error) {
 	return f.invoices, f.err
+}
+
+func (f *fakeStore) GetByMonth(year int, month time.Month) (*invoice.Invoice, error) {
+	for _, inv := range f.invoices {
+		if inv.Year == year && inv.Month == month {
+			return inv, nil
+		}
+	}
+	return nil, store.ErrNotFound
 }
 
 func get(t *testing.T, s web.Store, path string) *httptest.ResponseRecorder {
@@ -116,4 +126,93 @@ func TestListReportsStoreError(t *testing.T) {
 	if recorder.Code != http.StatusInternalServerError {
 		t.Errorf("status: got %d, want %d", recorder.Code, http.StatusInternalServerError)
 	}
+}
+
+func TestSelectingInvoiceShowsDetailBesideTheList(t *testing.T) {
+	selected := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Vendor:   "Jane Smith",
+		Customer: "Acme Corp",
+		Project:  "Website Redesign",
+		Rate:     100,
+		Weeks: []invoice.Week{
+			{
+				Start: time.Date(2027, time.October, 4, 0, 0, 0, 0, time.UTC),
+				End:   time.Date(2027, time.October, 10, 0, 0, 0, 0, time.UTC),
+				Hours: 40,
+			},
+			{
+				Start: time.Date(2027, time.October, 11, 0, 0, 0, 0, time.UTC),
+				End:   time.Date(2027, time.October, 17, 0, 0, 0, 0, time.UTC),
+				Hours: 32,
+			},
+		},
+	}
+	other := &invoice.Invoice{
+		Month:    time.November,
+		Year:     2027,
+		Customer: "Other Customer",
+		Project:  "Other Project",
+		Rate:     50,
+		Weeks:    []invoice.Week{{Hours: 10}},
+	}
+
+	recorder := get(t, &fakeStore{invoices: []*invoice.Invoice{selected, other}}, "/2027/oct")
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
+	}
+
+	body := recorder.Body.String()
+	for _, want := range []string{
+		`id="detail"`,
+		"Jane Smith", "Acme Corp", "Website Redesign", "October", "2027", "$100.00",
+		"Oct 4-10", "40", "Oct 11-17", "32", "$7200.00",
+		"Other Customer", "Other Project", `href="/2027/nov"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestDetailOmitsUnsetProject(t *testing.T) {
+	recorder := get(t, &fakeStore{invoices: []*invoice.Invoice{{
+		Month:    time.March,
+		Year:     2027,
+		Vendor:   "Jane Smith",
+		Customer: "Acme Corp",
+		Rate:     150,
+		Weeks: []invoice.Week{{
+			Start: time.Date(2027, time.March, 1, 0, 0, 0, 0, time.UTC),
+			End:   time.Date(2027, time.March, 7, 0, 0, 0, 0, time.UTC),
+			Hours: 40,
+		}},
+	}}}, "/2027/mar")
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
+	}
+
+	detail := detailPanel(t, recorder.Body.String())
+	if !strings.Contains(detail, "Acme Corp") {
+		t.Error("detail does not contain the customer")
+	}
+	if strings.Contains(detail, "Project") {
+		t.Error("detail contains a project label that is not set")
+	}
+}
+
+func detailPanel(t *testing.T, body string) string {
+	t.Helper()
+	start := strings.Index(body, `id="detail"`)
+	if start < 0 {
+		t.Fatal("body does not contain a detail panel")
+	}
+	end := strings.Index(body[start:], "</aside>")
+	if end < 0 {
+		t.Fatal("detail panel is not closed")
+	}
+	return body[start : start+end]
 }

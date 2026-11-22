@@ -3,16 +3,19 @@ package web
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/zon/invoicer/internal/invoice"
+	"github.com/zon/invoicer/internal/store"
 )
 
 //go:embed templates/*.html
@@ -21,6 +24,7 @@ var templateFiles embed.FS
 // Store provides the invoices the web app reads.
 type Store interface {
 	List() ([]*invoice.Invoice, error)
+	GetByMonth(year int, month time.Month) (*invoice.Invoice, error)
 }
 
 // Server serves the invoice web app.
@@ -37,6 +41,7 @@ func New(s Store) *Server {
 	}
 	server.SetHTMLTemplate(template.Must(template.ParseFS(templateFiles, "templates/*.html")))
 	server.GET("/", server.index)
+	server.GET("/:year/:month", server.show)
 	return server
 }
 
@@ -57,6 +62,7 @@ func (s *Server) Router() http.Handler {
 
 type pageData struct {
 	Invoices []invoiceRow
+	Selected *invoiceDetail
 }
 
 type invoiceRow struct {
@@ -68,14 +74,63 @@ type invoiceRow struct {
 	Path     string
 }
 
+type invoiceDetail struct {
+	Vendor   string
+	Customer string
+	Project  string
+	Month    string
+	Year     int
+	Rate     string
+	Total    string
+	Weeks    []weekRow
+}
+
+type weekRow struct {
+	Label string
+	Hours string
+}
+
 func (s *Server) index(c *gin.Context) {
+	s.render(c, nil)
+}
+
+func (s *Server) show(c *gin.Context) {
+	year, err := strconv.Atoi(c.Param("year"))
+	if err != nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+
+	month, err := invoice.ParseMonth(c.Param("month"))
+	if err != nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+
+	inv, err := s.store.GetByMonth(year, month)
+	if errors.Is(err, store.ErrNotFound) {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	s.render(c, inv)
+}
+
+func (s *Server) render(c *gin.Context, selected *invoice.Invoice) {
 	invoices, err := s.store.List()
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	c.HTML(http.StatusOK, "index.html", pageData{Invoices: rows(invoices)})
+	c.HTML(http.StatusOK, "index.html", pageData{
+		Invoices: rows(invoices),
+		Selected: detail(selected),
+	})
 }
 
 func rows(invoices []*invoice.Invoice) []invoiceRow {
@@ -96,6 +151,33 @@ func rows(invoices []*invoice.Invoice) []invoiceRow {
 			Project:  inv.Project,
 			Total:    fmt.Sprintf("$%.2f", inv.Total()),
 			Path:     detailPath(inv.Year, inv.Month),
+		})
+	}
+	return result
+}
+
+func detail(inv *invoice.Invoice) *invoiceDetail {
+	if inv == nil {
+		return nil
+	}
+	return &invoiceDetail{
+		Vendor:   inv.Vendor,
+		Customer: inv.Customer,
+		Project:  inv.Project,
+		Month:    inv.Month.String(),
+		Year:     inv.Year,
+		Rate:     fmt.Sprintf("$%.2f", inv.Rate),
+		Total:    fmt.Sprintf("$%.2f", inv.Total()),
+		Weeks:    weeks(inv.Weeks),
+	}
+}
+
+func weeks(items []invoice.Week) []weekRow {
+	result := make([]weekRow, 0, len(items))
+	for _, w := range items {
+		result = append(result, weekRow{
+			Label: invoice.FormatWeekLabel(w),
+			Hours: fmt.Sprintf("%g", w.Hours),
 		})
 	}
 	return result

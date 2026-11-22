@@ -1,0 +1,43 @@
+{{define "detail"}}<aside id="detail">
+  {{with .Selected}}
+  <section class="invoice-detail">
+    <h2>{{.Customer}} — {{.Month}} {{.Year}}</h2>
+    <dl>
+      <dt>Vendor</dt>
+      <dd>{{.Vendor}}</dd>
+      <dt>Customer</dt>
+      <dd>{{.Customer}}</dd>
+      {{if .Project}}
+      <dt>Project</dt>
+      <dd>{{.Project}}</dd>
+      {{end}}
+      <dt>Month</dt>
+      <dd>{{.Month}}</dd>
+      <dt>Year</dt>
+      <dd>{{.Year}}</dd>
+      <dt>Rate</dt>
+      <dd>{{.Rate}}</dd>
+    </dl>
+    <table class="weeks">
+      <caption>Weekly line items</caption>
+      <thead>
+        <tr>
+          <th>Week</th>
+          <th>Hours</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Weeks}}
+        <tr>
+          <td>{{.Label}}</td>
+          <td>{{.Hours}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    <p class="total">Total: {{.Total}}</p>
+  </section>
+  {{else}}
+  <p>Select an invoice to see its detail.</p>
+  {{end}}
+</aside>{{end}}
