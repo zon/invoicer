@@ -910,11 +910,12 @@ func TestPostPaidRejectsInvalidValue(t *testing.T) {
 
 func TestPostPaidReportsSaveFailure(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		paid bool
+		name  string
+		paid  bool
+		value string
 	}{
-		{"mark paid", false},
-		{"mark unpaid", true},
+		{"mark paid", false, "true"},
+		{"mark unpaid", true, "false"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			stored := &invoice.Invoice{
@@ -929,7 +930,7 @@ func TestPostPaidReportsSaveFailure(t *testing.T) {
 				setErr:   errors.New("database unavailable"),
 			}
 
-			recorder := post(t, s, "/2027/oct/paid", url.Values{"paid": {"true"}})
+			recorder := post(t, s, "/2027/oct/paid", url.Values{"paid": {tc.value}})
 
 			if recorder.Code != http.StatusInternalServerError {
 				t.Errorf("status: got %d, want %d", recorder.Code, http.StatusInternalServerError)
