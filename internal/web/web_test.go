@@ -1430,15 +1430,26 @@ func TestPagesLinkStylesheet(t *testing.T) {
 func TestServesAssetsWithoutSupportFiles(t *testing.T) {
 	t.Chdir(t.TempDir())
 
-	for _, path := range []string{"/", "/style.css"} {
+	s := &fakeStore{invoices: []*invoice.Invoice{{
+		Month:    time.October,
+		Year:     2027,
+		Vendor:   "Jane Smith",
+		Customer: "Acme Corp",
+		Rate:     100,
+	}}}
+
+	for _, path := range []string{"/", "/style.css", "/2027/oct/pdf"} {
 		t.Run(path, func(t *testing.T) {
-			recorder := get(t, &fakeStore{}, path)
+			recorder := get(t, s, path)
 
 			if recorder.Code != http.StatusOK {
 				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
 			}
 			if recorder.Body.Len() == 0 {
 				t.Error("body is empty")
+			}
+			if path == "/2027/oct/pdf" && !bytes.HasPrefix(recorder.Body.Bytes(), []byte("%PDF-")) {
+				t.Error("response is not a PDF")
 			}
 		})
 	}
