@@ -1,46 +1,37 @@
 {{define "index.html"}}<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Invoices</title>
-  <link rel="stylesheet" href="/style.css">
-  <script src="/htmx.min.js"></script>
-</head>
+{{template "head" .}}
 <body>
   <header>
     <h1>Invoices</h1>
   </header>
-  <div class="layout">
-    <section class="invoice-list" aria-label="Invoices">
-      <table>
-        <thead>
-          <tr>
-            <th>Customer</th>
-            <th>Month</th>
-            <th>Year</th>
-            <th>Project</th>
-            <th>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{range .Invoices}}
-          <tr>
-            <td><a href="{{.Path}}" hx-get="{{.Path}}" hx-target="#detail" hx-swap="outerHTML" hx-push-url="true">{{.Customer}}</a></td>
-            <td>{{.Month}}</td>
-            <td>{{.Year}}</td>
-            <td>{{.Project}}</td>
-            <td>{{.Total}}</td>
-          </tr>
-          {{else}}
-          <tr>
-            <td colspan="5">No invoices.</td>
-          </tr>
-          {{end}}
-        </tbody>
-      </table>
-    </section>
-    {{template "detail" .}}
-  </div>
+  <section class="invoice-list" aria-label="Invoices">
+    <table>
+      <thead>
+        <tr>
+          <th>Customer</th>
+          <th>Month</th>
+          <th>Year</th>
+          <th>Project</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Invoices}}
+        <tr>
+          <td><a href="{{.Path}}">{{.Customer}}</a></td>
+          <td>{{.Month}}</td>
+          <td>{{.Year}}</td>
+          <td>{{.Project}}</td>
+          <td>{{.Total}}</td>
+        </tr>
+        {{else}}
+        <tr>
+          <td colspan="5">No invoices.</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </section>
 </body>
 </html>{{end}}

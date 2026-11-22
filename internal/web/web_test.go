@@ -56,23 +56,10 @@ func TestNewDoesNotLogRoutesByDefault(t *testing.T) {
 
 func get(t *testing.T, s web.Store, path string) *httptest.ResponseRecorder {
 	t.Helper()
-	return request(t, s, path, nil)
-}
-
-func request(t *testing.T, s web.Store, path string, headers map[string]string) *httptest.ResponseRecorder {
-	t.Helper()
 	recorder := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
-	for key, value := range headers {
-		req.Header.Set(key, value)
-	}
 	web.New(s).ServeHTTP(recorder, req)
 	return recorder
-}
-
-func getPartial(t *testing.T, s web.Store, path string) *httptest.ResponseRecorder {
-	t.Helper()
-	return request(t, s, path, map[string]string{"HX-Request": "true"})
 }
 
 func TestListShowsEveryInvoiceNewestFirst(t *testing.T) {
@@ -164,7 +151,7 @@ func TestListReportsStoreError(t *testing.T) {
 	}
 }
 
-func TestSelectingInvoiceShowsDetailBesideTheList(t *testing.T) {
+func TestDetailShowsFullPageWithBackLink(t *testing.T) {
 	selected := &invoice.Invoice{
 		Month:    time.October,
 		Year:     2027,
@@ -207,11 +194,15 @@ func TestSelectingInvoiceShowsDetailBesideTheList(t *testing.T) {
 	if !strings.Contains(body, "</html>") {
 		t.Error("body does not close the page document")
 	}
+	if !strings.Contains(body, `href="/"`) || !strings.Contains(body, "Back to invoices") {
+		t.Error("page does not link back to the invoice list")
+	}
+	if strings.Contains(body, "Other Customer") {
+		t.Error("detail page lists another invoice")
+	}
 	for _, want := range []string{
-		`id="detail"`,
 		"Jane Smith", "Acme Corp", "Website Redesign", "October", "2027", "$100.00",
 		"Oct 4-10", "40", "Oct 11-17", "32", "$7200.00",
-		"Other Customer", "Other Project", `href="/2027/nov"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -244,78 +235,7 @@ func TestDetailReturnsNotFound(t *testing.T) {
 	}
 }
 
-func TestPartialRequestReturnsOnlyTheDetailPanel(t *testing.T) {
-	stored := &invoice.Invoice{
-		Month:    time.October,
-		Year:     2027,
-		Vendor:   "Jane Smith",
-		Customer: "Acme Corp",
-		Project:  "Website Redesign",
-		Rate:     100,
-		Weeks: []invoice.Week{{
-			Start: time.Date(2027, time.October, 4, 0, 0, 0, 0, time.UTC),
-			End:   time.Date(2027, time.October, 10, 0, 0, 0, 0, time.UTC),
-			Hours: 40,
-		}},
-	}
-
-	recorder := getPartial(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, "/2027/oct")
-
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
-	}
-
-	body := strings.TrimSpace(recorder.Body.String())
-	if !strings.HasPrefix(body, `<aside id="detail">`) {
-		t.Errorf("body is not a detail panel: %q", body)
-	}
-	if !strings.HasSuffix(body, "</aside>") {
-		t.Errorf("body does not end with the detail panel: %q", body)
-	}
-	if strings.Contains(body, "<!doctype") || strings.Contains(body, "<html") {
-		t.Error("body contains a page document")
-	}
-	for _, want := range []string{
-		"Jane Smith", "Acme Corp", "Website Redesign", "October", "2027",
-		"$100.00", "Oct 4-10", "40", "$4000.00",
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("body does not contain %q", want)
-		}
-	}
-}
-
-func TestPartialRequestReturnsNotFoundFragment(t *testing.T) {
-	stored := &invoice.Invoice{
-		Month:    time.October,
-		Year:     2027,
-		Customer: "Acme Corp",
-		Rate:     100,
-	}
-
-	for _, path := range []string{"/2026/oct", "/2027/sep", "/2027/foo"} {
-		t.Run(path, func(t *testing.T) {
-			recorder := getPartial(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, path)
-
-			if recorder.Code != http.StatusNotFound {
-				t.Errorf("status: got %d, want %d", recorder.Code, http.StatusNotFound)
-			}
-
-			body := strings.TrimSpace(recorder.Body.String())
-			if !strings.HasPrefix(body, `<aside id="detail">`) {
-				t.Errorf("body is not a detail panel: %q", body)
-			}
-			if !strings.Contains(strings.ToLower(body), "not found") {
-				t.Errorf("body does not report a missing invoice: %q", body)
-			}
-			if strings.Contains(body, "<!doctype") || strings.Contains(body, "<html") {
-				t.Error("body contains a page document")
-			}
-		})
-	}
-}
-
-func TestListLinksSelectInvoicesWithHtmx(t *testing.T) {
+func TestListLinksToDetailPages(t *testing.T) {
 	recorder := get(t, &fakeStore{invoices: []*invoice.Invoice{{
 		Month:    time.October,
 		Year:     2027,
@@ -328,31 +248,13 @@ func TestListLinksSelectInvoicesWithHtmx(t *testing.T) {
 	}
 
 	body := recorder.Body.String()
-	for _, want := range []string{
-		`href="/2027/oct"`,
-		`hx-get="/2027/oct"`,
-		`hx-target="#detail"`,
-		`hx-swap="outerHTML"`,
-		`hx-push-url="true"`,
-		`src="/htmx.min.js"`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("body does not contain %q", want)
+	if !strings.Contains(body, `href="/2027/oct"`) {
+		t.Error("body does not link to the invoice detail page")
+	}
+	for _, unwanted := range []string{"hx-get", "hx-target", "hx-swap", "hx-push-url", "htmx.min.js"} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("body contains %q", unwanted)
 		}
-	}
-}
-
-func TestServesHtmx(t *testing.T) {
-	recorder := get(t, &fakeStore{}, "/htmx.min.js")
-
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
-	}
-	if contentType := recorder.Header().Get("Content-Type"); !strings.Contains(contentType, "javascript") {
-		t.Errorf("content type: got %q, want javascript", contentType)
-	}
-	if !strings.Contains(recorder.Body.String(), "htmx") {
-		t.Error("body does not contain htmx")
 	}
 }
 
@@ -365,8 +267,8 @@ func TestServesStylesheet(t *testing.T) {
 	if contentType := recorder.Header().Get("Content-Type"); !strings.Contains(contentType, "text/css") {
 		t.Errorf("content type: got %q, want text/css", contentType)
 	}
-	if !strings.Contains(recorder.Body.String(), ".layout") {
-		t.Error("body does not contain the layout style")
+	if !strings.Contains(recorder.Body.String(), ".invoice-detail") {
+		t.Error("body does not contain the invoice detail style")
 	}
 }
 
@@ -395,7 +297,7 @@ func TestPagesLinkStylesheet(t *testing.T) {
 func TestServesAssetsWithoutSupportFiles(t *testing.T) {
 	t.Chdir(t.TempDir())
 
-	for _, path := range []string{"/", "/style.css", "/htmx.min.js"} {
+	for _, path := range []string{"/", "/style.css"} {
 		t.Run(path, func(t *testing.T) {
 			recorder := get(t, &fakeStore{}, path)
 
@@ -427,11 +329,11 @@ func TestDetailOmitsUnsetProject(t *testing.T) {
 		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
 	}
 
-	detail := detailPanel(t, recorder.Body.String())
-	if !strings.Contains(detail, "Acme Corp") {
+	body := recorder.Body.String()
+	if !strings.Contains(body, "Acme Corp") {
 		t.Error("detail does not contain the customer")
 	}
-	if strings.Contains(detail, "Project") {
+	if strings.Contains(body, "Project") {
 		t.Error("detail contains a project label that is not set")
 	}
 }
@@ -452,19 +354,17 @@ func TestEscapesStoredValues(t *testing.T) {
 	}
 
 	cases := []struct {
-		name    string
-		path    string
-		headers map[string]string
-		fields  []string
+		name   string
+		path   string
+		fields []string
 	}{
-		{"list", "/", nil, []string{stored.Customer, stored.Project}},
-		{"detail", "/2027/oct", nil, []string{stored.Vendor, stored.Customer, stored.Project}},
-		{"partial", "/2027/oct", map[string]string{"HX-Request": "true"}, []string{stored.Vendor, stored.Customer, stored.Project}},
+		{"list", "/", []string{stored.Customer, stored.Project}},
+		{"detail", "/2027/oct", []string{stored.Vendor, stored.Customer, stored.Project}},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			recorder := request(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, tc.path, tc.headers)
+			recorder := get(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, tc.path)
 
 			if recorder.Code != http.StatusOK {
 				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
@@ -482,17 +382,4 @@ func TestEscapesStoredValues(t *testing.T) {
 			}
 		})
 	}
-}
-
-func detailPanel(t *testing.T, body string) string {
-	t.Helper()
-	start := strings.Index(body, `id="detail"`)
-	if start < 0 {
-		t.Fatal("body does not contain a detail panel")
-	}
-	end := strings.Index(body[start:], "</aside>")
-	if end < 0 {
-		t.Fatal("detail panel is not closed")
-	}
-	return body[start : start+end]
 }

@@ -1,5 +1,12 @@
-{{define "detail"}}<aside id="detail">
-  {{with .Selected}}
+{{define "detail.html"}}<!doctype html>
+<html lang="en">
+{{template "head" .}}
+<body>
+  <header>
+    <h1>Invoices</h1>
+  </header>
+  <p class="back"><a href="/">&larr; Back to invoices</a></p>
+  {{with .Invoice}}
   <section class="invoice-detail">
     <h2>{{.Customer}} — {{.Month}} {{.Year}}</h2>
     <dl>
@@ -37,11 +44,6 @@
     </table>
     <p class="total">Total: {{.Total}}</p>
   </section>
-  {{else}}
-  <p>Select an invoice to see its detail.</p>
   {{end}}
-</aside>{{end}}
-
-{{define "not-found"}}<aside id="detail">
-  <p>Invoice not found.</p>
-</aside>{{end}}
+</body>
+</html>{{end}}

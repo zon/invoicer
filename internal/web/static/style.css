@@ -16,19 +16,16 @@ header h1 {
   margin: 0 0 1rem;
 }
 
-.layout {
-  align-items: flex-start;
-  display: flex;
-  gap: 2rem;
-}
-
 .invoice-list {
-  flex: 1 1 55%;
   overflow-x: auto;
 }
 
-#detail {
-  flex: 1 1 45%;
+.invoice-detail {
+  max-width: 48rem;
+}
+
+.back {
+  margin: 0 0 1rem;
 }
 
 table {
@@ -59,15 +56,4 @@ th {
 
 .total {
   font-weight: 600;
-}
-
-@media (max-width: 40rem) {
-  .layout {
-    flex-direction: column;
-  }
-
-  .invoice-list,
-  #detail {
-    width: 100%;
-  }
 }

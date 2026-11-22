@@ -8,23 +8,21 @@ The invoice list is the home page at `/`. It shows every stored invoice with its
 
 The list orders invoices by year and month, newest first.
 
-Selecting an invoice opens its detail.
+Selecting an invoice opens its detail page.
 
 ## Invoice Detail
 
 The invoice detail uses the year and month, like `/2027/oct`. The month uses its three-letter lowercase name. The detail shows the vendor, customer, project, month, year, hourly rate, weekly line items, and total. Each weekly line item shows its date range and hours.
 
-The list and detail share one page. The list stays visible and the selected invoice renders in a detail panel beside it. A direct request to an invoice detail URL returns the complete page with that invoice selected.
+The detail is a full page. It shows only that invoice and links back to the invoice list. A direct request to an invoice detail URL returns the complete page.
 
-The server returns 404 for an unknown year or month, or a month with no invoice. For an htmx request, it returns a not found fragment for the detail panel.
+The server returns 404 for an unknown year or month, or a month with no invoice.
 
 ## Rendering
 
-Gin serves HTTP. The server renders HTML with Go's `html/template` package. Pages, fragments, the stylesheet, and htmx all live in the binary, as [Stack](../stack.md) describes.
+Gin serves HTTP. The server renders HTML with Go's `html/template` package. Pages and the stylesheet live in the binary, as [Stack](../stack.md) describes.
 
-A normal request returns a complete page. A request with `HX-Request: true` returns only the detail fragment. The fragment is a complete HTML element, not a document. Every response is HTML. The app has no JSON API.
-
-htmx makes invoice selection a partial update. Selecting an invoice loads the detail fragment into the panel and updates the URL. Without htmx the same link opens the complete page.
+Every response is a complete HTML page. The app has no JSON API.
 
 Templates escape stored values. The app never renders an invoice field as raw HTML.
 

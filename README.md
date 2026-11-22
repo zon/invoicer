@@ -125,7 +125,7 @@ Changing the customer or project replaces the stored values and keeps the identi
 
 ## Web App
 
-`invoicer web` starts a read-only web app for the stored invoices. It lists invoices at `/` and shows a selected invoice beside the list.
+`invoicer web` starts a read-only web app for the stored invoices. It lists invoices at `/` and shows each invoice as a full page with a link back to the list.
 
 ```
 invoicer web [options]
@@ -136,7 +136,7 @@ invoicer web [options]
 | `--address` | Address the server listens on. Defaults to `:8080`. |
 | `--database` | Path to the invoice database. Defaults to the config value, then `~/.invoicer/invoices.db`. |
 
-The server serves pages, the stylesheet, and htmx from the binary, so it needs no support files. An interrupt stops the server gracefully.
+The server serves pages and the stylesheet from the binary, so it needs no support files. An interrupt stops the server gracefully.
 
 ```bash
 # Serve the default database at http://localhost:8080/
