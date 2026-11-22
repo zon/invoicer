@@ -42,6 +42,9 @@ type Week struct {
 // ErrNotFound reports that the store holds no invoice matching a lookup.
 var ErrNotFound = errors.New("invoice not found")
 
+// ErrPaid reports that the store refused a write to a paid invoice.
+var ErrPaid = errors.New("invoice is paid")
+
 // Store reads and writes invoices in a SQLite database.
 type Store struct {
 	db *gorm.DB
@@ -143,6 +146,9 @@ func (s *Store) Save(inv *invoice.Invoice) (string, bool, error) {
 
 		switch {
 		case err == nil:
+			if existing.Paid {
+				return fmt.Errorf("%w for %s %d", ErrPaid, inv.Month, inv.Year)
+			}
 			id = existing.ID
 			if err := updateInvoice(tx, id, inv); err != nil {
 				return err
@@ -283,20 +289,37 @@ func (s *Store) GetByMonth(year int, month time.Month) (*invoice.Invoice, error)
 
 // SetProject sets the project on the invoice for the given year and month. It
 // changes only the project and reports ErrNotFound when that month holds no
-// invoice.
+// invoice. It reports ErrPaid when the invoice is paid.
 func (s *Store) SetProject(year int, month time.Month, project string) error {
-	return s.updateColumn(year, month, "project", project)
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var existing Invoice
+		err := tx.
+			Where("year = ? AND month = ?", year, int(month)).
+			First(&existing).
+			Error
+
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			return fmt.Errorf("%w for %s %d", ErrNotFound, month, year)
+		case err != nil:
+			return fmt.Errorf("looking up invoice: %w", err)
+		case existing.Paid:
+			return fmt.Errorf("%w for %s %d", ErrPaid, month, year)
+		}
+
+		return updateColumn(tx, year, month, "project", project)
+	})
 }
 
 // SetPaid sets the paid status on the invoice for the given year and month. It
 // changes only the paid status and reports ErrNotFound when that month holds no
 // invoice.
 func (s *Store) SetPaid(year int, month time.Month, paid bool) error {
-	return s.updateColumn(year, month, "paid", paid)
+	return updateColumn(s.db, year, month, "paid", paid)
 }
 
-func (s *Store) updateColumn(year int, month time.Month, column string, value any) error {
-	result := s.db.
+func updateColumn(db *gorm.DB, year int, month time.Month, column string, value any) error {
+	result := db.
 		Model(&Invoice{}).
 		Where("year = ? AND month = ?", year, int(month)).
 		Update(column, value)
