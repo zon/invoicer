@@ -1,6 +1,6 @@
 # Milestones
 
-High level objectives, worked in order. See [process](zpecs/process.md).
+High level objectives. Work through them in order. See [process](zpecs/process.md).
 
 ## Invoice web app
 
@@ -8,11 +8,11 @@ A web app lists invoices from the database and renders a selected invoice from i
 
 ## OIDC access control
 
-The web app signs users in with OIDC. Users in the admin group read every invoice. Client users read the customer's invoices. Requests without a valid session are rejected. There is one customer, so no group-to-customer mapping is needed.
+The web app signs users in with OIDC. Users in the admin group read every invoice. Client users read the customer's invoices. The web app rejects requests without a valid session. With one customer, the app needs no group-to-customer mapping.
 
 ## Client project edits
 
-A client can change the project name on any invoice. The new name is saved and shown on the invoice.
+A client can change the project name on any invoice. The system saves the new name and shows it on the invoice.
 
 ## Paid status
 

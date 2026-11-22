@@ -15,9 +15,7 @@ Config holds these values:
 
 `database` defaults to `~/.invoicer/invoices.db`. The other values have no default. Generate requires `vendor`, `customer`, `rate`, and `hours` from a flag or config. `project` may be empty.
 
-The `pdf` and `model` values are removed. See [Invoices](invoices.md).
-
-## Precedence
+## Order
 
 Generate merges values in this order, highest first:
 
@@ -27,7 +25,7 @@ Generate merges values in this order, highest first:
 
 A flag wins over the matching config value. A missing config file is an empty config. Invalid YAML is an error.
 
-A missing or zero `rate` or `hours` is unset. Unknown config keys are ignored.
+A missing or zero `rate` or `hours` is unset. Generate ignores unknown config keys.
 
 ## File
 
@@ -46,6 +44,6 @@ The config path is fixed. Generate does not write the file.
 
 `invoicer set config` writes values to the config file. It accepts the same options as generate, without the month and year arguments.
 
-Only provided flags update the file. Other values stay as they are. The command creates `~/.invoicer` and the file when they do not exist.
+Only provided flags update the file. The other values stay the same. The command creates `~/.invoicer` and the file when they do not exist.
 
 `set config` cannot clear a value. Edit the file to remove one.

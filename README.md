@@ -1,6 +1,6 @@
 # invoicer
 
-Generate monthly invoices for hourly contractors. Invoices and their weekly line items are stored in a SQLite database.
+Generate monthly invoices for hourly contractors. The CLI stores invoices and their weekly line items in a SQLite database.
 
 ## Installation
 
@@ -29,10 +29,10 @@ invoicer [<month> [<year>]] [options]
 |--------|-------|-------------|
 | `--vendor` | `-v` | Name of the contractor sending the invoice. Required if not set in config. |
 | `--customer` | `-c` | Name of the client receiving the invoice. Required if not set in config. |
-| `--project` | | Name of the project to annotate the invoice with. Optional. |
+| `--project` | | Project name to store with the invoice. Optional. |
 | `--database` | | Path to the invoice database. Defaults to `~/.invoicer/invoices.db`. |
 | `--rate` | `-r` | Hourly rate in dollars. Required if not set in config. |
-| `--hours` | `-H` | Hours per week worked. Required if not set in config. |
+| `--hours` | `-H` | Hours worked per week. Required if not set in config. |
 
 ### Examples
 
@@ -49,7 +49,7 @@ invoicer 3 2025
 # Specify all options inline
 invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 150 --hours 40
 
-# Annotate the invoice with a project name
+# Add a project name to the invoice
 invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 150 --hours 40 --project "Website Redesign"
 
 # Store the invoice in a different database
@@ -58,7 +58,7 @@ invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 150 --hours 40 --da
 
 ## Config File
 
-Frequently-used options can be stored in `~/.invoicer/config.yaml` to avoid repeating them on every invocation. CLI options always take precedence over config file values.
+Store common options in `~/.invoicer/config.yaml` to avoid repeating them on every run. CLI options always override config file values.
 
 ### Config File Format
 
@@ -73,7 +73,7 @@ database: ~/.invoicer/invoices.db
 
 ### `set config` Subcommand
 
-Use the `set config` subcommand to write options to the config file without editing it manually. Only the options you specify are updated; others remain unchanged.
+Use the `set config` subcommand to write options to the config file without editing it by hand. The command updates only the options you specify and leaves the others unchanged.
 
 ```
 invoicer set config [options]
@@ -83,12 +83,12 @@ invoicer set config [options]
 |--------|-------------|
 | `--vendor` | Name of the contractor sending the invoice. |
 | `--customer` | Name of the client receiving the invoice. |
-| `--project` | Name of the project to annotate invoices with. |
+| `--project` | Project name to store with invoices. |
 | `--database` | Path to the invoice database. |
 | `--rate` | Hourly rate in dollars. |
-| `--hours` | Hours per week worked. |
+| `--hours` | Hours worked per week. |
 
-The config file and its directory (`~/.invoicer/`) are created automatically if they do not exist.
+Invoicer creates the config file and its directory (`~/.invoicer/`) when they do not exist.
 
 #### Examples
 
@@ -105,7 +105,7 @@ invoicer set config --database ./work.db
 
 ## Invoice Generation
 
-Invoices cover one calendar month and are broken into weekly line items. A week belongs to a month if its **Wednesday** falls in that month. Each week bills the full hours per week.
+An invoice covers one calendar month and holds weekly line items. The database stores one invoice per month. A week belongs to a month if its **Wednesday** falls in that month. Each week bills the full weekly hours.
 
 Generate saves the invoice and its weeks, then reports whether it created or edited the invoice, with the month, year, and identifier:
 
@@ -114,18 +114,18 @@ $ invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 150 --hours 40
 Created invoice for October 2026: 2f8c1a9b5d3e4f6a7c8b9d0e1f2a3b4c
 ```
 
-Running generate again for the same customer, year, month, and project edits the stored invoice and prints the same identifier:
+Running generate again for the same year and month edits the stored invoice and prints the same identifier:
 
 ```
 $ invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 175 --hours 40
 Edited invoice for October 2026: 2f8c1a9b5d3e4f6a7c8b9d0e1f2a3b4c
 ```
 
-A different project creates a separate invoice.
+A different project changes the stored invoice's project.
 
 ## Database
 
-The database path comes from `--database`, then the config file, then the default of `~/.invoicer/invoices.db`. Invoicer creates the database file and its parent directory on first use, then migrates the schema automatically.
+The database path comes from `--database`, then the config file, then the default of `~/.invoicer/invoices.db`. Invoicer creates the database file and its parent directory on first use, then migrates the schema.
 
 ## Development
 

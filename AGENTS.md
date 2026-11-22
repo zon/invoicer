@@ -1,5 +1,6 @@
 ## Zpecs
 
+* [Stack](docs/stack.md) - Software used by the CLI and web app
 * [Milestones](docs/milestones.md) - High level objectives
 * [Regressions](regressions.md) - How to organize and resolve bugs and problems found during other work
 * [Code](docs/zpecs/code.md) - Read before writing code

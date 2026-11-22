@@ -1,7 +1,7 @@
 # Invoices Specification
 
 ## Purpose
-Invoices record one customer's contract work for one calendar month and are kept in the invoice database.
+Invoices record one customer's contract work for one calendar month. The invoice database stores them.
 
 ## Requirements
 
@@ -11,10 +11,10 @@ The system SHALL save every generated invoice and its weekly line items in the i
 Saving an invoice and its weeks SHALL be one transaction. A failed save SHALL leave any previously stored invoice unchanged.
 
 #### Scenario: New invoice is stored
-- GIVEN no invoice exists for the customer, month, and project
+- GIVEN no invoice exists for the year and month
 - WHEN an invoice is generated
-- THEN the invoice fields and every weekly line item are stored
-- AND no invoice file is written
+- THEN the system stores the invoice fields and every weekly line item
+- AND the system writes no invoice file
 
 #### Scenario: Failed save leaves the old invoice
 - GIVEN a stored invoice
@@ -22,29 +22,31 @@ Saving an invoice and its weeks SHALL be one transaction. A failed save SHALL le
 - THEN the previously stored invoice and its weeks remain unchanged
 
 ### Requirement: Invoice Identity
-The store SHALL assign an opaque string identifier to an invoice when it is first saved. The identifier SHALL never change.
+The store SHALL assign an opaque string identifier to an invoice when it first saves the invoice. The identifier SHALL never change.
 
-A customer, year, month, and project SHALL identify an invoice. Saving the same four values again SHALL replace the stored values and weekly line items, and SHALL keep the identifier. A different project SHALL identify a different invoice.
+A year and month SHALL identify an invoice. The database SHALL hold at most one invoice per year and month. Saving an invoice for an existing year and month SHALL replace the stored values and weekly line items, and SHALL keep the identifier. The new customer and project SHALL replace the stored customer and project.
 
 #### Scenario: First save assigns an identifier
-- GIVEN no invoice exists for the customer, month, and project
-- WHEN the invoice is saved
-- THEN it receives an identifier
-- AND the identifier is returned to the caller
+- GIVEN no invoice exists for the year and month
+- WHEN the store saves an invoice
+- THEN the store assigns an identifier
+- AND the store returns the identifier to the caller
 
 #### Scenario: Saving the same invoice replaces it
 - GIVEN a stored invoice
-- WHEN an invoice with the same customer, year, month, and project is saved with new rate or hours
-- THEN the stored values and weeks are replaced
-- AND the identifier is unchanged
+- WHEN the store saves an invoice for the same year and month with a new customer, project, rate, or hours
+- THEN the store replaces the stored values and weeks
+- AND the identifier stays the same
 
-#### Scenario: Project separates invoices
+#### Scenario: Project change replaces the invoice
 - GIVEN a stored invoice for a project
-- WHEN another invoice is saved for the same customer, year, and month with a different project
-- THEN both invoices remain stored with different identifiers
+- WHEN the store saves an invoice for the same year and month with a different project
+- THEN one invoice remains for that month
+- AND the stored project changes
+- AND the identifier stays the same
 
 ### Requirement: Invoice Amount
-An invoice total SHALL be the sum of each week's hours multiplied by the invoice's hourly rate. The total SHALL be computed from stored data and SHALL NOT be stored.
+An invoice total SHALL be the sum of each week's hours multiplied by the invoice's hourly rate. The system SHALL compute the total from stored data and SHALL NOT store it.
 
 #### Scenario: Total follows stored data
 - GIVEN a stored invoice with weekly hours and an hourly rate
@@ -62,16 +64,16 @@ Generating an invoice SHALL save it and print whether the invoice was created or
 #### Scenario: Successful generation
 - GIVEN valid vendor, customer, rate, and hours
 - WHEN a new invoice is generated
-- THEN the invoice is stored
+- THEN the system stores the invoice
 - AND the output reports that it was created, with the month, year, and identifier
 
 #### Scenario: Existing invoice is regenerated
 - GIVEN a stored invoice
-- WHEN an invoice with the same customer, year, month, and project is generated again
+- WHEN generate creates the same year and month again
 - THEN the output reports that it was edited, with the same identifier
 
 #### Scenario: Invalid input stores nothing
 - GIVEN an invalid month, or a missing required value
 - WHEN an invoice is generated
-- THEN an error is reported
-- AND no invoice is stored
+- THEN generate reports an error
+- AND generate stores no invoice
