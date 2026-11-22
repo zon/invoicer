@@ -106,6 +106,7 @@ type indexData struct {
 
 type detailData struct {
 	User    *access.User
+	Admin   bool
 	Invoice *invoiceDetail
 }
 
@@ -127,6 +128,7 @@ type invoiceDetail struct {
 	Rate     string
 	Total    string
 	Path     string
+	PaidPath string
 	Paid     bool
 	Weeks    []weekRow
 }
@@ -173,6 +175,13 @@ func currentUser(c *gin.Context) *access.User {
 	return user
 }
 
+// isAdmin reports whether the current user may change invoices. Without access
+// configured every request is treated as an admin.
+func isAdmin(c *gin.Context) bool {
+	user := currentUser(c)
+	return user == nil || user.Role == access.Admin
+}
+
 func (s *Server) index(c *gin.Context) {
 	invoices, err := s.store.List()
 	if err != nil {
@@ -204,6 +213,7 @@ func (s *Server) show(c *gin.Context) {
 
 	c.HTML(http.StatusOK, "detail.html", detailData{
 		User:    currentUser(c),
+		Admin:   isAdmin(c),
 		Invoice: detail(inv),
 	})
 }
@@ -288,6 +298,7 @@ func detail(inv *invoice.Invoice) *invoiceDetail {
 		Rate:     fmt.Sprintf("$%.2f", inv.Rate),
 		Total:    fmt.Sprintf("$%.2f", inv.Total()),
 		Path:     detailPath(inv.Year, inv.Month),
+		PaidPath: paidPath(inv.Year, inv.Month),
 		Paid:     inv.Paid,
 		Weeks:    weeks(inv.Weeks),
 	}
@@ -306,4 +317,8 @@ func weeks(items []invoice.Week) []weekRow {
 
 func detailPath(year int, month time.Month) string {
 	return fmt.Sprintf("/%d/%s", year, strings.ToLower(month.String()[:3]))
+}
+
+func paidPath(year int, month time.Month) string {
+	return detailPath(year, month) + "/paid"
 }

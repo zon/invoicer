@@ -22,7 +22,15 @@
       <dd>{{.Year}}</dd>
       <dt>Rate</dt>
       <dd>{{.Rate}}</dd>
+      <dt>Status</dt>
+      <dd>{{if .Paid}}Paid{{else}}Unpaid{{end}}</dd>
     </dl>
+    {{if $.Admin}}
+    <form class="paid-status" method="post" action="{{.PaidPath}}">
+      <input type="hidden" name="paid" value="{{if .Paid}}false{{else}}true{{end}}">
+      <button type="submit">{{if .Paid}}Mark unpaid{{else}}Mark paid{{end}}</button>
+    </form>
+    {{end}}
     {{if not .Paid}}
     <form class="project-edit" method="post" action="{{.Path}}">
       <label for="project">Project</label>
