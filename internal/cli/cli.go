@@ -11,9 +11,6 @@ import (
 	"github.com/zon/invoicer/internal/store"
 )
 
-// DefaultModel is the opencode model used when neither the CLI nor config specifies one.
-const DefaultModel = "deepseek/deepseek-flash"
-
 // CLI is the root command for invoicer.
 type CLI struct {
 	// Generate is the default subcommand for generating an invoice.
@@ -48,12 +45,6 @@ type GenerateCmd struct {
 
 	// Hours is the number of hours per week worked.
 	Hours float64 `short:"H" help:"Hours per week worked. Required without config."`
-
-	// PDF controls whether the HTML invoice is converted to a PDF.
-	PDF bool `short:"p" help:"Convert the HTML invoice to a PDF file. Defaults to false."`
-
-	// Model is the opencode-formatted model stub to use for generation.
-	Model string `short:"m" help:"opencode-formatted model stub to use for invoice generation. Defaults to deepseek/deepseek-flash."`
 }
 
 // resolveOptions merges config file values with CLI-provided values.
@@ -76,7 +67,6 @@ func (c *GenerateCmd) resolveOptions(configPath string) (*ResolvedOptions, error
 	opts := &ResolvedOptions{
 		Month: c.Month,
 		Year:  c.Year,
-		PDF:   c.PDF,
 	}
 
 	// Merge string fields: CLI takes precedence, fall back to config.
@@ -106,20 +96,6 @@ func (c *GenerateCmd) resolveOptions(configPath string) (*ResolvedOptions, error
 		opts.Hours = cfg.Hours
 	}
 
-	// Merge PDF: CLI flag (-p) sets to true; if false (not set), use config value.
-	if !c.PDF && cfg.PDF != nil {
-		opts.PDF = *cfg.PDF
-	}
-
-	// Merge model: CLI value takes precedence, then config, then the default.
-	opts.Model = c.Model
-	if opts.Model == "" {
-		opts.Model = cfg.Model
-	}
-	if opts.Model == "" {
-		opts.Model = DefaultModel
-	}
-
 	// Merge database: CLI value takes precedence, then config, then the default.
 	opts.Database = c.Database
 	if opts.Database == "" {
@@ -144,8 +120,6 @@ type ResolvedOptions struct {
 	Project  string
 	Rate     float64
 	Hours    float64
-	PDF      bool
-	Model    string
 	Database string
 }
 

@@ -32,12 +32,6 @@ type SetConfigCmd struct {
 
 	// Hours is the number of hours per week worked.
 	Hours float64 `help:"Hours per week worked."`
-
-	// PDF controls whether the HTML invoice is converted to a PDF.
-	PDF *bool `help:"Convert the HTML invoice to a PDF file."`
-
-	// Model is the opencode-formatted model stub to use for generation.
-	Model string `help:"opencode-formatted model stub to use for invoice generation."`
 }
 
 // Run executes the 'set config' subcommand, writing specified options to ~/.invoicer/config.yaml.
@@ -63,8 +57,6 @@ func RunSetConfig(s *SetConfigCmd, path string) error {
 		Customer: s.Customer,
 		Rate:     s.Rate,
 		Hours:    s.Hours,
-		PDF:      s.PDF,
-		Model:    s.Model,
 		Project:  s.Project,
 		Database: s.Database,
 	}

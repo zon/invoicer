@@ -10,8 +10,6 @@ import (
 	"github.com/zon/invoicer/internal/config"
 )
 
-func boolPtr(b bool) *bool { return &b }
-
 // TestCLIParsesWithoutPanic verifies that the CLI struct can be parsed by kong
 // without duplicate flag errors. This guards against regressions where sibling
 // subcommands happen to share flag names.
@@ -67,8 +65,6 @@ func TestResolveOptions_NoConfig(t *testing.T) {
 		Project:  "My Project",
 		Rate:     100,
 		Hours:    40,
-		PDF:      true,
-		Model:    "deepseek/deepseek-flash",
 	}
 	path := filepath.Join(t.TempDir(), "nonexistent.yaml")
 	opts, err := c.resolveOptions(path)
@@ -90,12 +86,6 @@ func TestResolveOptions_NoConfig(t *testing.T) {
 	if opts.Hours != 40 {
 		t.Errorf("Hours: got %v, want 40", opts.Hours)
 	}
-	if !opts.PDF {
-		t.Error("PDF: got false, want true")
-	}
-	if opts.Model != "deepseek/deepseek-flash" {
-		t.Errorf("Model: got %q, want %q", opts.Model, "deepseek/deepseek-flash")
-	}
 }
 
 func TestResolveOptions_CLIOverridesConfig(t *testing.T) {
@@ -103,8 +93,6 @@ func TestResolveOptions_CLIOverridesConfig(t *testing.T) {
 customer: Config Customer
 rate: 50
 hours: 20
-pdf: false
-model: deepseek/deepseek-flash
 project: Config Project
 `)
 	c := &GenerateCmd{
@@ -113,8 +101,6 @@ project: Config Project
 		Project:  "CLI Project",
 		Rate:     150,
 		Hours:    35,
-		PDF:      true,
-		Model:    "deepseek/deepseek-flash",
 	}
 	opts, err := c.resolveOptions(path)
 	if err != nil {
@@ -135,12 +121,6 @@ project: Config Project
 	if opts.Hours != 35 {
 		t.Errorf("Hours: CLI should override config; got %v", opts.Hours)
 	}
-	if !opts.PDF {
-		t.Error("PDF: CLI true should override config false")
-	}
-	if opts.Model != "deepseek/deepseek-flash" {
-		t.Errorf("Model: CLI should override config; got %q", opts.Model)
-	}
 }
 
 func TestResolveOptions_ConfigFallback(t *testing.T) {
@@ -148,8 +128,6 @@ func TestResolveOptions_ConfigFallback(t *testing.T) {
 customer: Config Customer
 rate: 50
 hours: 20
-pdf: true
-model: deepseek/deepseek-flash
 project: Config Project
 `)
 	// CLI provides no values (zero values).
@@ -173,24 +151,25 @@ project: Config Project
 	if opts.Hours != 20 {
 		t.Errorf("Hours: expected config fallback; got %v", opts.Hours)
 	}
-	if !opts.PDF {
-		t.Error("PDF: expected config fallback true; got false")
-	}
-	// Model: c.Model is "" (zero) so the config value is used.
-	if opts.Model != "deepseek/deepseek-flash" {
-		t.Errorf("Model: expected config fallback; got %q", opts.Model)
-	}
 }
 
-func TestResolveOptions_DefaultModel(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "nonexistent.yaml")
-	c := &GenerateCmd{}
-	opts, err := c.resolveOptions(path)
+func TestResolveOptions_IgnoresRemovedConfigValues(t *testing.T) {
+	path := writeTestConfig(t, `vendor: Config Vendor
+customer: Config Customer
+rate: 50
+hours: 20
+pdf: true
+model: deepseek/deepseek-flash
+`)
+	opts, err := (&GenerateCmd{}).resolveOptions(path)
 	if err != nil {
 		t.Fatalf("resolveOptions: %v", err)
 	}
-	if opts.Model != DefaultModel {
-		t.Errorf("Model: expected default %q; got %q", DefaultModel, opts.Model)
+	if opts.Vendor != "Config Vendor" || opts.Customer != "Config Customer" {
+		t.Errorf("expected vendor and customer from config, got %q and %q", opts.Vendor, opts.Customer)
+	}
+	if opts.Rate != 50 || opts.Hours != 20 {
+		t.Errorf("expected rate and hours from config, got %v and %v", opts.Rate, opts.Hours)
 	}
 }
 
@@ -278,6 +257,40 @@ func TestCLIParsesDatabaseFlag(t *testing.T) {
 	}
 	if cmd.Generate.Database != "/tmp/invoices.db" {
 		t.Errorf("Generate.Database: got %q, want %q", cmd.Generate.Database, "/tmp/invoices.db")
+	}
+}
+
+func TestCLIRejectsRemovedGenerateFlags(t *testing.T) {
+	for _, args := range [][]string{
+		{"--pdf"},
+		{"-p"},
+		{"--model", "deepseek/deepseek-flash"},
+		{"-m", "deepseek/deepseek-flash"},
+	} {
+		var cmd CLI
+		p, err := kong.New(&cmd, kong.Name("invoicer"), kong.Exit(func(int) {}))
+		if err != nil {
+			t.Fatalf("kong.New failed: %v", err)
+		}
+		if _, err := p.Parse(args); err == nil {
+			t.Errorf("expected generate to reject %v", args)
+		}
+	}
+}
+
+func TestCLIRejectsRemovedSetConfigFlags(t *testing.T) {
+	for _, args := range [][]string{
+		{"set", "config", "--pdf"},
+		{"set", "config", "--model", "deepseek/deepseek-flash"},
+	} {
+		var cmd CLI
+		p, err := kong.New(&cmd, kong.Name("invoicer"), kong.Exit(func(int) {}))
+		if err != nil {
+			t.Fatalf("kong.New failed: %v", err)
+		}
+		if _, err := p.Parse(args); err == nil {
+			t.Errorf("expected set config to reject %v", args)
+		}
 	}
 }
 

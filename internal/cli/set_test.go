@@ -17,8 +17,6 @@ func TestRunSetConfig_CreatesConfig(t *testing.T) {
 		Customer: "Test Client",
 		Rate:     120,
 		Hours:    40,
-		PDF:      boolPtr(true),
-		Model:    "deepseek/deepseek-flash",
 		Project:  "Test Project",
 		Database: "/var/lib/invoicer/invoices.db",
 	}
@@ -42,12 +40,6 @@ func TestRunSetConfig_CreatesConfig(t *testing.T) {
 	}
 	if cfg.Hours != 40 {
 		t.Errorf("Hours: got %v, want 40", cfg.Hours)
-	}
-	if cfg.PDF == nil || !*cfg.PDF {
-		t.Errorf("PDF: got %v, want true", cfg.PDF)
-	}
-	if cfg.Model != "deepseek/deepseek-flash" {
-		t.Errorf("Model: got %q, want %q", cfg.Model, "deepseek/deepseek-flash")
 	}
 	if cfg.Project != "Test Project" {
 		t.Errorf("Project: got %q, want %q", cfg.Project, "Test Project")

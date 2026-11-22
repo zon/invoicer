@@ -16,8 +16,6 @@ type Config struct {
 	Customer string  `yaml:"customer,omitempty"`
 	Rate     float64 `yaml:"rate,omitempty"`
 	Hours    float64 `yaml:"hours,omitempty"`
-	PDF      *bool   `yaml:"pdf,omitempty"`
-	Model    string  `yaml:"model,omitempty"`
 	Project  string  `yaml:"project,omitempty"`
 	Database string  `yaml:"database,omitempty"`
 }
@@ -88,12 +86,6 @@ func Save(path string, updates *Config) error {
 	}
 	if updates.Hours != 0 {
 		existing.Hours = updates.Hours
-	}
-	if updates.PDF != nil {
-		existing.PDF = updates.PDF
-	}
-	if updates.Model != "" {
-		existing.Model = updates.Model
 	}
 	if updates.Project != "" {
 		existing.Project = updates.Project
