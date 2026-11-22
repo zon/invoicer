@@ -129,6 +129,29 @@ func TestPDFDownloadRendersLatestStoredValues(t *testing.T) {
 	}
 }
 
+func TestPDFDownloadReturnsNotFound(t *testing.T) {
+	s := &downloadStore{invoices: []*invoice.Invoice{testInvoice()}}
+
+	for _, path := range []string{
+		"/2026/oct/pdf",
+		"/2027/sep/pdf",
+		"/2027/foo/pdf",
+		"/2027/13/pdf",
+		"/not-a-year/oct/pdf",
+	} {
+		t.Run(path, func(t *testing.T) {
+			recorder := download(t, s, path)
+
+			if recorder.Code != http.StatusNotFound {
+				t.Errorf("status: got %d, want %d", recorder.Code, http.StatusNotFound)
+			}
+			if bytes.HasPrefix(recorder.Body.Bytes(), []byte("%PDF-")) {
+				t.Error("response holds a PDF")
+			}
+		})
+	}
+}
+
 func TestPDFDownloadChangesNothing(t *testing.T) {
 	inv := testInvoice()
 	want := *inv
