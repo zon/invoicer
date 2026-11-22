@@ -677,6 +677,146 @@ func TestServiceUsesValues(t *testing.T) {
 	assertService(t, renderChart(t, "--set", "service.port=8088"), 8088)
 }
 
+func ingressTLS(t *testing.T, ingress map[string]any) map[string]any {
+	t.Helper()
+	spec := ingress["spec"].(map[string]any)
+	tls, _ := spec["tls"].([]any)
+	if len(tls) != 1 {
+		t.Fatalf("ingress has %d TLS entries, want one", len(tls))
+	}
+	return tls[0].(map[string]any)
+}
+
+func findManifest(t *testing.T, manifests []map[string]any, apiVersion, kind string) map[string]any {
+	t.Helper()
+	for _, manifest := range manifests {
+		if manifest["apiVersion"] == apiVersion && manifest["kind"] == kind {
+			return manifest
+		}
+	}
+	t.Fatalf("chart renders no %s %s", apiVersion, kind)
+	return nil
+}
+
+func TestIngressRoutesHostnameToService(t *testing.T) {
+	manifests := renderChart(t)
+	ingress := findManifest(t, manifests, "networking.k8s.io/v1", "Ingress")
+	spec := ingress["spec"].(map[string]any)
+
+	equal(t, "ingressClassName", spec["ingressClassName"], "traefik")
+
+	rules, _ := spec["rules"].([]any)
+	if len(rules) != 1 {
+		t.Fatalf("ingress has %d rules, want one", len(rules))
+	}
+	rule := rules[0].(map[string]any)
+	equal(t, "rule host", rule["host"], "invoices.haralovich.com")
+
+	paths, _ := rule["http"].(map[string]any)["paths"].([]any)
+	if len(paths) != 1 {
+		t.Fatalf("ingress has %d paths, want one", len(paths))
+	}
+	path := paths[0].(map[string]any)
+	equal(t, "path", path["path"], "/")
+	equal(t, "pathType", path["pathType"], "Prefix")
+
+	backend := path["backend"].(map[string]any)["service"].(map[string]any)
+	serviceName, _ := findKind(t, manifests, "Service")["metadata"].(map[string]any)["name"].(string)
+	backendName, _ := backend["name"].(string)
+	equal(t, "backend service name", backendName, serviceName)
+
+	port, _ := backend["port"].(map[string]any)
+	assertPort(t, "backend service port", port, "number", 80)
+
+	tls := ingressTLS(t, ingress)
+	equalsAny(t, "tls hosts", tls["hosts"], []any{"invoices.haralovich.com"})
+	equal(t, "tls secretName", tls["secretName"], "invoicer-tls")
+}
+
+func TestIngressUsesValues(t *testing.T) {
+	manifests := renderChart(t,
+		"--set", "hostname=billing.example.com",
+		"--set", "ingress.className=nginx",
+		"--set", "service.port=8088",
+	)
+	ingress := findManifest(t, manifests, "networking.k8s.io/v1", "Ingress")
+	spec := ingress["spec"].(map[string]any)
+
+	equal(t, "ingressClassName", spec["ingressClassName"], "nginx")
+	rule := spec["rules"].([]any)[0].(map[string]any)
+	equal(t, "rule host", rule["host"], "billing.example.com")
+	path := rule["http"].(map[string]any)["paths"].([]any)[0].(map[string]any)
+	assertPort(t, "backend service port", path["backend"].(map[string]any)["service"].(map[string]any)["port"].(map[string]any), "number", 8088)
+
+	tls := ingressTLS(t, ingress)
+	equalsAny(t, "tls hosts", tls["hosts"], []any{"billing.example.com"})
+}
+
+func TestIngressDisabled(t *testing.T) {
+	manifests := renderChart(t, "--set", "ingress.enabled=false")
+	for _, manifest := range manifests {
+		if manifest["kind"] == "Ingress" {
+			t.Fatal("chart renders an Ingress when disabled")
+		}
+	}
+}
+
+func TestCertificate(t *testing.T) {
+	certificate := findManifest(t, renderChart(t), "cert-manager.io/v1", "Certificate")
+	spec := certificate["spec"].(map[string]any)
+
+	equal(t, "name", certificate["metadata"].(map[string]any)["name"], "invoicer")
+	equal(t, "secretName", spec["secretName"], "invoicer-tls")
+	equalsAny(t, "dnsNames", spec["dnsNames"], []any{"invoices.haralovich.com"})
+
+	issuer := spec["issuerRef"].(map[string]any)
+	equal(t, "issuerRef.name", issuer["name"], "lets-encrypt")
+	equal(t, "issuerRef.kind", issuer["kind"], "ClusterIssuer")
+}
+
+func TestCertificateUsesValues(t *testing.T) {
+	certificate := findManifest(t, renderChart(t,
+		"--set", "certificate.name=billing",
+		"--set", "certificate.issuer=staging",
+		"--set", "hostname=billing.example.com",
+	), "cert-manager.io/v1", "Certificate")
+	spec := certificate["spec"].(map[string]any)
+
+	equal(t, "name", certificate["metadata"].(map[string]any)["name"], "billing")
+	equal(t, "secretName", spec["secretName"], "billing-tls")
+	equalsAny(t, "dnsNames", spec["dnsNames"], []any{"billing.example.com"})
+	equal(t, "issuerRef.name", spec["issuerRef"].(map[string]any)["name"], "staging")
+}
+
+func TestCertificateDisabled(t *testing.T) {
+	manifests := renderChart(t, "--set", "certificate.enabled=false")
+
+	for _, manifest := range manifests {
+		if manifest["kind"] == "Certificate" {
+			t.Fatal("chart renders a Certificate when disabled")
+		}
+	}
+
+	ingress := findManifest(t, manifests, "networking.k8s.io/v1", "Ingress")
+	spec := ingress["spec"].(map[string]any)
+	if tls, ok := spec["tls"]; ok && tls != nil {
+		t.Fatalf("ingress has TLS configuration: %v", tls)
+	}
+}
+
+func equalsAny(t *testing.T, name string, got any, want []any) {
+	t.Helper()
+	values, ok := got.([]any)
+	if !ok || len(values) != len(want) {
+		t.Fatalf("%s: got %v, want %v", name, got, want)
+	}
+	for i := range want {
+		if values[i] != want[i] {
+			t.Fatalf("%s: got %v, want %v", name, got, want)
+		}
+	}
+}
+
 func TestHelmLintAndTemplate(t *testing.T) {
 	helm, err := exec.LookPath("helm")
 	if err != nil {
