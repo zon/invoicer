@@ -47,8 +47,9 @@ func newInvoicePDF() (*gopdf.GoPdf, error) {
 	return pdf, nil
 }
 
-// renderInvoicePDF returns inv as an A4 portrait PDF.
-func renderInvoicePDF(inv *invoice.Invoice) ([]byte, error) {
+// renderInvoicePDF returns inv as an A4 portrait PDF. Tests replace it to
+// simulate a failed render.
+var renderInvoicePDF = func(inv *invoice.Invoice) ([]byte, error) {
 	w, err := newPDFWriter()
 	if err != nil {
 		return nil, err

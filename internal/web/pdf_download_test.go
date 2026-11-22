@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -164,5 +165,29 @@ func TestPDFDownloadChangesNothing(t *testing.T) {
 
 	if !reflect.DeepEqual(inv, &want) {
 		t.Errorf("invoice changed: got %+v, want %+v", inv, &want)
+	}
+}
+
+func TestPDFDownloadReportsFailedRender(t *testing.T) {
+	original := renderInvoicePDF
+	t.Cleanup(func() { renderInvoicePDF = original })
+	renderInvoicePDF = func(*invoice.Invoice) ([]byte, error) {
+		return []byte("%PDF-1.7 partial"), errors.New("rendering invoice")
+	}
+	s := &downloadStore{invoices: []*invoice.Invoice{testInvoice()}}
+
+	recorder := download(t, s, "/2027/oct/pdf")
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusInternalServerError)
+	}
+	if recorder.Body.Len() != 0 {
+		t.Errorf("response holds %d bytes, want no document", recorder.Body.Len())
+	}
+	if contentType := recorder.Header().Get("Content-Type"); contentType == "application/pdf" {
+		t.Errorf("content type: got %q, want no PDF", contentType)
+	}
+	if disposition := recorder.Header().Get("Content-Disposition"); disposition != "" {
+		t.Errorf("content disposition: got %q, want none", disposition)
 	}
 }
