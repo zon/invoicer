@@ -176,6 +176,64 @@ func TestInvoicePDFWrapsLongValues(t *testing.T) {
 	if !strings.Contains(text, strings.Repeat("W", 20)) {
 		t.Error("PDF does not wrap an unbroken long value")
 	}
+	assertPDFLinesInsidePage(t, lines)
+}
+
+func TestInvoicePDFWrapsPunctuationAndNonLatinValues(t *testing.T) {
+	inv := testInvoice()
+	value := "naïve — “Ελένη” Привет … € £ ¥ © ® "
+	inv.Vendor = strings.Repeat(value, 40)
+	inv.Customer = strings.Repeat(value, 40)
+	inv.Project = strings.Repeat(value, 40) + strings.Repeat("ΕλένηПривет", 40)
+
+	data, err := renderInvoicePDF(inv)
+	if err != nil {
+		t.Fatalf("renderInvoicePDF: %v", err)
+	}
+	text, lines := readInvoicePDF(t, data)
+	for _, label := range []string{"Vendor:", "Customer:", "Project:"} {
+		if !strings.Contains(text, label) {
+			t.Errorf("PDF does not show the %s value", strings.TrimSuffix(label, ":"))
+		}
+	}
+	for _, want := range []string{"naïve", "—", "“Ελένη”", "Привет", "…", "€", "£", "¥", "©", "®"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("PDF does not show %q", want)
+		}
+	}
+	if !strings.Contains(text, strings.Repeat("ΕλένηПривет", 5)) {
+		t.Error("PDF does not wrap an unbroken non-Latin value")
+	}
+	assertPDFLinesInsidePage(t, lines)
+}
+
+func TestInvoicePDFRendersStoredTextLiterally(t *testing.T) {
+	inv := testInvoice()
+	inv.Vendor = "Jane — “Doe” ‘quoted’ … € £ ¥ © ®"
+	inv.Customer = "<script>alert(1)</script>"
+	inv.Project = "naïve Über Привет Ελένη"
+
+	data, err := renderInvoicePDF(inv)
+	if err != nil {
+		t.Fatalf("renderInvoicePDF: %v", err)
+	}
+	text, _ := readInvoicePDF(t, data)
+	for _, want := range []string{
+		"Vendor: Jane — “Doe” ‘quoted’ … € £ ¥ © ®",
+		"Customer: <script>alert(1)</script>",
+		"Project: naïve Über Привет Ελένη",
+	} {
+		if !hasPDFLine(text, want) {
+			t.Errorf("PDF does not show %q as text", want)
+		}
+	}
+	if bytes.Contains(data, []byte("<script>alert(1)</script>")) {
+		t.Error("PDF contains the stored value as raw markup")
+	}
+}
+
+func assertPDFLinesInsidePage(t *testing.T, lines []pdfTextLine) {
+	t.Helper()
 
 	measurer, err := newInvoicePDF()
 	if err != nil {
