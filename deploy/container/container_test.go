@@ -76,13 +76,54 @@ func TestContainerfileRunsAsUser1000(t *testing.T) {
 	}
 }
 
-func TestContainerfileSetsNoDatabasePath(t *testing.T) {
+func TestContainerfileReadsMountedConfig(t *testing.T) {
+	root := repoRoot(t)
+	runtime := runtimeStage(t, readFile(t, filepath.Join(root, "deploy", "container", "Containerfile")))
+
+	home := stageEnv(t, runtime, "HOME")
+	configPath := filepath.Join(home, ".invoicer", "config.yaml")
+	if configPath != "/home/invoicer/.invoicer/config.yaml" {
+		t.Fatalf("config path: got %q, want /home/invoicer/.invoicer/config.yaml", configPath)
+	}
+	if !strings.Contains(runtime, "mkdir -p "+filepath.Dir(configPath)) {
+		t.Fatal("image does not create the config directory")
+	}
+	if regexp.MustCompile(`(?mi)^ENV\b.*config(?:[_-]?path)?`).MatchString(runtime) {
+		t.Fatal("image sets a config path instead of reading it from HOME")
+	}
+}
+
+func TestContainerfileReadsMountedDatabase(t *testing.T) {
 	root := repoRoot(t)
 	runtime := runtimeStage(t, readFile(t, filepath.Join(root, "deploy", "container", "Containerfile")))
 
 	if regexp.MustCompile(`(?mi)^ENV\b.*(?:database|db[_-]?path)`).MatchString(runtime) {
-		t.Fatal("image sets a database path")
+		t.Fatal("image sets a database path instead of reading it from the config")
 	}
+	if regexp.MustCompile(`(?m)--(?:database|db)\b`).MatchString(runtime) {
+		t.Fatal("image passes a database path instead of leaving it to the config")
+	}
+}
+
+func TestContainerfileLeavesWritablePathsToMounts(t *testing.T) {
+	root := repoRoot(t)
+	runtime := runtimeStage(t, readFile(t, filepath.Join(root, "deploy", "container", "Containerfile")))
+
+	if regexp.MustCompile(`(?m)^VOLUME\b`).MatchString(runtime) {
+		t.Fatal("image declares a volume instead of leaving data mounts to the deployment")
+	}
+	if regexp.MustCompile(`(?m)^WORKDIR\b`).MatchString(runtime) {
+		t.Fatal("image sets a working directory that a read-only root filesystem cannot write")
+	}
+}
+
+func stageEnv(t *testing.T, stage, name string) string {
+	t.Helper()
+	match := regexp.MustCompile(`(?m)^ENV ` + regexp.QuoteMeta(name) + `=(\S+)$`).FindStringSubmatch(stage)
+	if match == nil {
+		t.Fatalf("runtime stage does not set %s", name)
+	}
+	return match[1]
 }
 
 func TestContainerfileExposesPort8080(t *testing.T) {
