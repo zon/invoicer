@@ -158,7 +158,7 @@ A session SHALL last 12 hours and SHALL NOT renew. A missing, expired, or invali
 - AND the app sends the user to `/login`
 
 ### Requirement: Invoice Access
-Every signed-in user SHALL read every stored invoice. The list and detail SHALL show the same invoices to admin and customer users. Every signed-in user SHALL change the project on any stored invoice, as [Project Edits](project-edits.md) describes. A signed-in user SHALL NOT change any other stored value.
+Every signed-in user SHALL read every stored invoice. The list and detail SHALL show the same invoices to admin and customer users. Every signed-in user SHALL change the project on any unpaid stored invoice, as [Project Edits](project-edits.md) describes. A paid invoice SHALL reject project changes until an admin user marks it unpaid, as [Paid Status](paid-status.md) describes. An admin user SHALL change the paid status. A customer user SHALL NOT change the paid status. A signed-in user SHALL NOT change any other stored value.
 
 An unknown invoice SHALL return 404, as [Web](web.md#requirement-missing-invoice) describes.
 
@@ -186,6 +186,23 @@ An unknown invoice SHALL return 404, as [Web](web.md#requirement-missing-invoice
 - GIVEN a signed-in admin user and a stored invoice
 - WHEN the admin posts a new project
 - THEN the app saves the project
+
+#### Scenario: Admin marks an invoice paid
+- GIVEN a signed-in admin user and a stored unpaid invoice
+- WHEN the admin posts a paid status
+- THEN the app saves the paid status
+
+#### Scenario: Customer cannot mark an invoice paid
+- GIVEN a signed-in customer user and a stored unpaid invoice
+- WHEN the customer posts a paid status
+- THEN the app returns 403
+- AND the invoice stays unpaid
+
+#### Scenario: Paid invoice rejects project edits
+- GIVEN a signed-in customer user and a stored paid invoice
+- WHEN the customer posts a new project
+- THEN the app returns 409
+- AND the invoice keeps its project
 
 ### Requirement: Signed-In Header
 Every page shown to a signed-in user SHALL show the user's email and a sign-out link.

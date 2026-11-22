@@ -1,6 +1,6 @@
 # Access Design
 
-The web app requires sign-in through an OpenID Connect provider. Every page needs a valid session. The provider reports group membership. A user in the admin group or the customer group may sign in. Every signed-in user reads every invoice and changes invoice projects, as [Project Edits](project-edits.md) describes. The role decides other writes, such as marking an invoice paid.
+The web app requires sign-in through an OpenID Connect provider. Every page needs a valid session. The provider reports group membership. A user in the admin group or the customer group may sign in. Every signed-in user reads every invoice and changes invoice projects while the invoice is unpaid, as [Project Edits](project-edits.md) describes. An admin user marks invoices paid, as [Paid Status](paid-status.md) describes. A paid invoice keeps its values and project until an admin marks it unpaid.
 
 ## Groups
 

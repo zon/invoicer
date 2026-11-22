@@ -1,12 +1,14 @@
 # Invoices Specification
 
 ## Purpose
-Invoices record one customer's contract work for one calendar month. The invoice database stores them.
+Invoices record one customer's contract work for one calendar month. The invoice database stores them and their paid status.
 
 ## Requirements
 
 ### Requirement: Invoice Storage
 The system SHALL save every generated invoice and its weekly line items in the invoice database. The stored invoice is the source of truth. Generating an invoice SHALL write no HTML, PDF, or other invoice files.
+
+A stored invoice SHALL record a paid status. A new invoice SHALL start unpaid.
 
 Saving an invoice and its weeks SHALL be one transaction. A failed save SHALL leave any previously stored invoice unchanged.
 
@@ -14,6 +16,7 @@ Saving an invoice and its weeks SHALL be one transaction. A failed save SHALL le
 - GIVEN no invoice exists for the year and month
 - WHEN an invoice is generated
 - THEN the system stores the invoice fields and every weekly line item
+- AND the invoice's paid status is unpaid
 - AND the system writes no invoice file
 
 #### Scenario: Failed save leaves the old invoice
@@ -24,7 +27,7 @@ Saving an invoice and its weeks SHALL be one transaction. A failed save SHALL le
 ### Requirement: Invoice Identity
 The store SHALL assign an opaque string identifier to an invoice when it first saves the invoice. The identifier SHALL never change.
 
-A year and month SHALL identify an invoice. The database SHALL hold at most one invoice per year and month. Saving an invoice for an existing year and month SHALL replace the stored values and weekly line items, and SHALL keep the identifier. The new customer and project SHALL replace the stored customer and project.
+A year and month SHALL identify an invoice. The database SHALL hold at most one invoice per year and month. Saving an invoice for an existing year and month SHALL replace the stored values and weekly line items, and SHALL keep the identifier. The new customer and project SHALL replace the stored customer and project. A paid invoice SHALL NOT be replaced. A save for a paid month SHALL fail and leave the stored invoice unchanged.
 
 #### Scenario: First save assigns an identifier
 - GIVEN no invoice exists for the year and month
@@ -33,13 +36,19 @@ A year and month SHALL identify an invoice. The database SHALL hold at most one 
 - AND the store returns the identifier to the caller
 
 #### Scenario: Saving the same invoice replaces it
-- GIVEN a stored invoice
+- GIVEN a stored unpaid invoice
 - WHEN the store saves an invoice for the same year and month with a new customer, project, rate, or hours
 - THEN the store replaces the stored values and weeks
 - AND the identifier stays the same
 
+#### Scenario: Paid invoice is not replaced
+- GIVEN a stored paid invoice
+- WHEN an invoice is generated for the same year and month
+- THEN the save fails
+- AND the stored values, weeks, and paid status stay the same
+
 #### Scenario: Project change replaces the invoice
-- GIVEN a stored invoice for a project
+- GIVEN a stored unpaid invoice for a project
 - WHEN the store saves an invoice for the same year and month with a different project
 - THEN one invoice remains for that month
 - AND the stored project changes
@@ -60,12 +69,14 @@ An invoice total SHALL be the sum of each week's hours multiplied by the invoice
 - THEN the total is the sum of each week's hours times the rate
 
 #### Scenario: Replacement changes the total
-- GIVEN a stored invoice
+- GIVEN a stored unpaid invoice
 - WHEN the invoice is replaced with different weekly hours or rate
 - THEN the total reflects the replacement values
 
 ### Requirement: Generate Output
 Generating an invoice SHALL save it and print whether the invoice was created or edited, the invoice's month and year, and its identifier. Generate SHALL NOT print file paths or report HTML or PDF output.
+
+When the stored invoice for the month is paid, generate SHALL report that the invoice is paid, store nothing, and exit non-zero.
 
 #### Scenario: Successful generation
 - GIVEN valid vendor, customer, rate, and hours
@@ -73,8 +84,15 @@ Generating an invoice SHALL save it and print whether the invoice was created or
 - THEN the system stores the invoice
 - AND the output reports that it was created, with the month, year, and identifier
 
+#### Scenario: Paid invoice blocks generate
+- GIVEN a stored paid invoice
+- WHEN generate creates the same year and month
+- THEN generate reports that the invoice is paid
+- AND generate stores no change
+- AND the command exits non-zero
+
 #### Scenario: Existing invoice is regenerated
-- GIVEN a stored invoice
+- GIVEN a stored unpaid invoice
 - WHEN generate creates the same year and month again
 - THEN the output reports that it was edited, with the same identifier
 

@@ -1,0 +1,11 @@
+- The store records a paid status for each invoice. A new invoice is unpaid. Opening an existing database adds the status as unpaid.
+- The store's `SetPaid(year, month, paid)` changes only the paid status on the invoice for a year and month, keeps the identifier and weeks, reports a not-found error when the month holds no invoice, and leaves the invoice unchanged when the write fails.
+- The store refuses to replace a paid invoice, and `SetProject` refuses to change a paid invoice's project. Both report that the invoice is paid and leave the invoice unchanged.
+- Generating an invoice for a paid month reports that the invoice is paid, stores nothing, and exits non-zero.
+- A project edit for a paid invoice returns 409 and keeps the project. The detail shows the project form only while the invoice is unpaid.
+- The invoice detail shows Paid or Unpaid. An admin user sees a form with a button labeled Mark paid or Mark unpaid that posts one `paid` field with `true` or `false` to the paid path, like `/2027/oct/paid`. A customer user sees no form, and without access settings the app treats the request as an admin user.
+- A POST to the paid path saves the status and redirects with 303 to the detail page. An unknown or invalid month returns 404, a value other than `true` or `false` returns 400, and a failed save returns 500 and leaves the status unchanged.
+- A customer POST to the paid path returns 403 and leaves the status unchanged. A POST without a session goes to sign-in and returns to the detail page without saving.
+- The invoice list shows each invoice's paid status in a Status column, and the list and detail show the same status.
+- Automated tests cover the unpaid default, marking paid and unpaid, the paid invoice lock for generate and project edits, the admin-only rule, the 404, 400, and 500 responses, the no-sign-in mode, and the no-session redirect.
+- The README documents that admin users mark invoices paid or unpaid from the invoice detail page and that a paid invoice blocks generation and project edits.

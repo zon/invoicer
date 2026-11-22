@@ -2,13 +2,9 @@
 
 High level objectives. Work through them in order. See [process](zpecs/process.md).
 
-## Customer project edits
-
-A customer can change the project name on any invoice. The system saves the new name and shows it on the invoice.
-
 ## Paid status
 
-An admin can mark an invoice paid and mark it unpaid again. The invoice list and detail show the paid status. Customers cannot change the status.
+An admin can mark an invoice paid and mark it unpaid again. The invoice list and detail show the paid status. Customers cannot change the status. A paid invoice cannot be edited or replaced until it is marked unpaid.
 
 ## PDF downloads
 
