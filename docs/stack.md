@@ -1,6 +1,6 @@
 # Stack
 
-The CLI generates HTML invoices and renders PDFs with a headless browser.
+The CLI stores invoices and their weekly line items in a SQLite database.
 
 ## Software
 
@@ -9,6 +9,4 @@ The CLI generates HTML invoices and renders PDFs with a headless browser.
 * [yaml.v3](https://pkg.go.dev/gopkg.in/yaml.v3)
 * [GORM](https://gorm.io/)
 * [SQLite](https://sqlite.org/)
-* [Playwright for Go](https://github.com/mxschmitt/playwright-go)
-* [Chromium](https://www.chromium.org/Home/) — installed and driven by Playwright
 * [just](https://just.systems/man/en/)

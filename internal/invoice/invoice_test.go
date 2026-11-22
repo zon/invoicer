@@ -1,6 +1,7 @@
 package invoice_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -236,5 +237,37 @@ func TestInvoiceTotal(t *testing.T) {
 	want := 9600.0
 	if got := inv.Total(); got != want {
 		t.Errorf("Total() = %.2f, want %.2f", got, want)
+	}
+}
+
+func TestFormatWeekLabel_SameMonth(t *testing.T) {
+	w := invoice.Week{
+		Start: time.Date(2025, time.January, 6, 0, 0, 0, 0, time.UTC),
+		End:   time.Date(2025, time.January, 12, 0, 0, 0, 0, time.UTC),
+	}
+	got := invoice.FormatWeekLabel(w)
+	// Should contain "Jan" and "6" and "12".
+	if !strings.Contains(got, "Jan") {
+		t.Errorf("FormatWeekLabel() = %q, expected to contain 'Jan'", got)
+	}
+	if !strings.Contains(got, "6") {
+		t.Errorf("FormatWeekLabel() = %q, expected to contain '6'", got)
+	}
+	if !strings.Contains(got, "12") {
+		t.Errorf("FormatWeekLabel() = %q, expected to contain '12'", got)
+	}
+}
+
+func TestFormatWeekLabel_CrossMonth(t *testing.T) {
+	w := invoice.Week{
+		Start: time.Date(2025, time.January, 30, 0, 0, 0, 0, time.UTC),
+		End:   time.Date(2025, time.February, 2, 0, 0, 0, 0, time.UTC),
+	}
+	got := invoice.FormatWeekLabel(w)
+	if !strings.Contains(got, "Jan") {
+		t.Errorf("FormatWeekLabel() = %q, expected to contain 'Jan'", got)
+	}
+	if !strings.Contains(got, "Feb") {
+		t.Errorf("FormatWeekLabel() = %q, expected to contain 'Feb'", got)
 	}
 }
