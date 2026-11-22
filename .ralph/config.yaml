@@ -1,1 +1,14 @@
 model: deepseek/deepseek-flash
+
+before:
+  - name: build
+    command: just
+    args:
+      - build
+
+services:
+  - name: web
+    command: just
+    args:
+      - dev
+    port: 8080
