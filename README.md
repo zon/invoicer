@@ -105,16 +105,23 @@ invoicer set config --database ./work.db
 
 ## Invoice Generation
 
-Invoices cover one calendar month and are broken into weekly line items. A week belongs to a month if its **Wednesday** falls in that month. Weeks that span month boundaries are prorated based on the number of working days (Monday–Friday) within the billed month.
+Invoices cover one calendar month and are broken into weekly line items. A week belongs to a month if its **Wednesday** falls in that month. Each week bills the full hours per week.
 
-Generate saves the invoice and its weeks, then prints the invoice identifier:
+Generate saves the invoice and its weeks, then reports whether it created or edited the invoice, with the month, year, and identifier:
 
 ```
 $ invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 150 --hours 40
-2f8c1a9b5d3e4f6a7c8b9d0e1f2a3b4c
+Created invoice for October 2026: 2f8c1a9b5d3e4f6a7c8b9d0e1f2a3b4c
 ```
 
-Running generate again for the same customer, year, month, and project updates the stored invoice and prints the same identifier. A different project creates a separate invoice.
+Running generate again for the same customer, year, month, and project edits the stored invoice and prints the same identifier:
+
+```
+$ invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 175 --hours 40
+Edited invoice for October 2026: 2f8c1a9b5d3e4f6a7c8b9d0e1f2a3b4c
+```
+
+A different project creates a separate invoice.
 
 ## Database
 

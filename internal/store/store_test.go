@@ -69,12 +69,15 @@ func TestSaveStoresInvoiceAndWeeks(t *testing.T) {
 	s, _ := openTempStore(t)
 	inv := testInvoice()
 
-	id, err := s.Save(inv)
+	id, created, err := s.Save(inv)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	if id == "" {
 		t.Fatal("expected a non-empty invoice identifier")
+	}
+	if !created {
+		t.Error("expected a new invoice to report created")
 	}
 
 	got, err := s.Get(id)
@@ -119,7 +122,7 @@ func TestSaveStoresInvoiceAndWeeks(t *testing.T) {
 func TestSaveKeepsIdentifierAndReplacesStoredInvoice(t *testing.T) {
 	s, _ := openTempStore(t)
 
-	id, err := s.Save(testInvoice())
+	id, _, err := s.Save(testInvoice())
 	if err != nil {
 		t.Fatalf("Save original: %v", err)
 	}
@@ -135,9 +138,12 @@ func TestSaveKeepsIdentifierAndReplacesStoredInvoice(t *testing.T) {
 		},
 	}
 
-	updatedID, err := s.Save(updated)
+	updatedID, created, err := s.Save(updated)
 	if err != nil {
 		t.Fatalf("Save updated: %v", err)
+	}
+	if created {
+		t.Error("expected an existing invoice to report not created")
 	}
 	if updatedID != id {
 		t.Fatalf("identifier changed: got %q, want %q", updatedID, id)
@@ -173,7 +179,7 @@ func TestSavePersistsAcrossReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	id, err := s.Save(testInvoice())
+	id, _, err := s.Save(testInvoice())
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -204,11 +210,11 @@ func TestSaveStoresSeparateInvoices(t *testing.T) {
 	second.Project = "Mobile App"
 	second.Weeks = second.Weeks[:1]
 
-	firstID, err := s.Save(first)
+	firstID, _, err := s.Save(first)
 	if err != nil {
 		t.Fatalf("Save first: %v", err)
 	}
-	secondID, err := s.Save(second)
+	secondID, _, err := s.Save(second)
 	if err != nil {
 		t.Fatalf("Save second: %v", err)
 	}

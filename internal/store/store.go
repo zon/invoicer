@@ -12,6 +12,7 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 
 	"github.com/zon/invoicer/internal/invoice"
 )
@@ -54,7 +55,9 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("creating database directory %q: %w", dir, err)
 	}
 
-	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("opening database %q: %w", path, err)
 	}
@@ -75,11 +78,13 @@ func (s *Store) Close() error {
 	return db.Close()
 }
 
-// Save stores an invoice and its weekly line items and returns the invoice identifier.
-// Saving the same customer, year, month, and project again replaces the stored
-// invoice and keeps its identifier.
-func (s *Store) Save(inv *invoice.Invoice) (string, error) {
+// Save stores an invoice and its weekly line items and returns the invoice
+// identifier and whether the invoice was newly created. Saving the same
+// customer, year, month, and project again replaces the stored invoice and
+// keeps its identifier.
+func (s *Store) Save(inv *invoice.Invoice) (string, bool, error) {
 	var id string
+	created := false
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var existing Invoice
@@ -103,6 +108,7 @@ func (s *Store) Save(inv *invoice.Invoice) (string, error) {
 				return err
 			}
 			id = newInvoiceID
+			created = true
 			if err := createInvoice(tx, id, inv); err != nil {
 				return err
 			}
@@ -113,9 +119,9 @@ func (s *Store) Save(inv *invoice.Invoice) (string, error) {
 		return replaceWeeks(tx, id, inv.Weeks)
 	})
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
-	return id, nil
+	return id, created, nil
 }
 
 func createInvoice(tx *gorm.DB, id string, inv *invoice.Invoice) error {

@@ -57,13 +57,18 @@ An invoice total SHALL be the sum of each week's hours multiplied by the invoice
 - THEN the total reflects the replacement values
 
 ### Requirement: Generate Output
-Generating an invoice SHALL save it and print its identifier. Generate SHALL NOT print file paths or report HTML or PDF output.
+Generating an invoice SHALL save it and print whether the invoice was created or edited, the invoice's month and year, and its identifier. Generate SHALL NOT print file paths or report HTML or PDF output.
 
 #### Scenario: Successful generation
 - GIVEN valid vendor, customer, rate, and hours
-- WHEN an invoice is generated
+- WHEN a new invoice is generated
 - THEN the invoice is stored
-- AND the invoice identifier is printed
+- AND the output reports that it was created, with the month, year, and identifier
+
+#### Scenario: Existing invoice is regenerated
+- GIVEN a stored invoice
+- WHEN an invoice with the same customer, year, month, and project is generated again
+- THEN the output reports that it was edited, with the same identifier
 
 #### Scenario: Invalid input stores nothing
 - GIVEN an invalid month, or a missing required value

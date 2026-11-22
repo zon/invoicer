@@ -35,7 +35,7 @@ func TestSaveFailureLeavesStoredInvoiceUnchanged(t *testing.T) {
 			},
 		},
 	}
-	id, err := s.Save(original)
+	id, _, err := s.Save(original)
 	if err != nil {
 		t.Fatalf("Save original: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestSaveFailureLeavesStoredInvoiceUnchanged(t *testing.T) {
 			},
 		},
 	}
-	if _, err := s.Save(replacement); err == nil {
+	if _, _, err := s.Save(replacement); err == nil {
 		t.Fatal("expected save to fail")
 	}
 

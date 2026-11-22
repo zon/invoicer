@@ -12,6 +12,15 @@ import (
 	"github.com/zon/invoicer/internal/store"
 )
 
+func outputID(t *testing.T, out string) string {
+	t.Helper()
+	_, id, ok := strings.Cut(strings.TrimSpace(out), ": ")
+	if !ok || id == "" {
+		t.Fatalf("expected an invoice identifier in output %q", out)
+	}
+	return id
+}
+
 func TestGenerateSavesInvoiceAndPrintsIdentifier(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
@@ -33,13 +42,10 @@ func TestGenerateSavesInvoiceAndPrintsIdentifier(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	id := strings.TrimSpace(out.String())
-	if id == "" {
-		t.Fatal("expected an invoice identifier in the output")
+	if !strings.HasPrefix(out.String(), "Created invoice for January 2025: ") {
+		t.Errorf("output: got %q, want created invoice with month, year, and identifier", out.String())
 	}
-	if out.String() != id+"\n" {
-		t.Errorf("output: got %q, want only the identifier", out.String())
-	}
+	id := outputID(t, out.String())
 
 	s, err := store.Open(dbPath)
 	if err != nil {
@@ -126,8 +132,14 @@ func TestGenerateReusesIdentifierForSameInvoice(t *testing.T) {
 		t.Fatalf("second run: %v", err)
 	}
 
-	firstID := strings.TrimSpace(firstOut.String())
-	secondID := strings.TrimSpace(secondOut.String())
+	if !strings.HasPrefix(firstOut.String(), "Created invoice for January 2025: ") {
+		t.Errorf("first output: got %q, want a created invoice", firstOut.String())
+	}
+	if !strings.HasPrefix(secondOut.String(), "Edited invoice for January 2025: ") {
+		t.Errorf("second output: got %q, want an edited invoice", secondOut.String())
+	}
+	firstID := outputID(t, firstOut.String())
+	secondID := outputID(t, secondOut.String())
 	if firstID != secondID {
 		t.Fatalf("identifier changed: got %q, want %q", secondID, firstID)
 	}

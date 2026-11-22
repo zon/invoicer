@@ -171,11 +171,15 @@ func (c *GenerateCmd) run(configPath string, out io.Writer) error {
 	}
 	defer s.Close()
 
-	id, err := s.Save(inv)
+	id, created, err := s.Save(inv)
 	if err != nil {
 		return fmt.Errorf("saving invoice: %w", err)
 	}
 
-	fmt.Fprintln(out, id)
+	action := "Edited"
+	if created {
+		action = "Created"
+	}
+	fmt.Fprintf(out, "%s invoice for %s %d: %s\n", action, month.String(), year, id)
 	return nil
 }
