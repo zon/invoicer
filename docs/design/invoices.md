@@ -25,6 +25,8 @@ The year and month identify an invoice. Generating the same year and month again
 
 The store uses one SQLite database and GORM. Invoices and weeks live in related tables. The invoice table has a unique key on year and month, so a month holds one invoice. The store replaces the existing invoice for a month instead of inserting a second one. When an older database holds duplicate invoices for a month, opening it keeps the newest invoice and removes the others. Saving an invoice and its weeks is one transaction, so a failure leaves no partial invoice.
 
+The store also sets an invoice's project for a year and month. The write changes only the project, keeps the identifier and weeks, and fails with a not-found error when the month holds no invoice. See [Project Edits](project-edits.md).
+
 The store creates and migrates the database on first use. The default path is `~/.invoicer/invoices.db`.
 
 The path comes from the `database` config value or the `--database` flag. The flag wins. `set config --database` writes the config value. See [Config](config.md).

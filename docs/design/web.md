@@ -1,6 +1,6 @@
 # Web Design
 
-The web app is a second front end over the invoice database. It lists stored invoices and renders a selected invoice. The web app is read-only in this milestone.
+The web app is a second front end over the invoice database. It lists stored invoices, renders a selected invoice, and changes invoice projects. The project edit is the only write.
 
 ## Invoice List
 
@@ -12,7 +12,7 @@ Selecting an invoice opens its detail page.
 
 ## Invoice Detail
 
-The invoice detail uses the year and month, like `/2027/oct`. The month uses its three-letter lowercase name. The detail shows the vendor, customer, project, month, year, hourly rate, weekly line items, and total. Each weekly line item shows its date range and hours.
+The invoice detail uses the year and month, like `/2027/oct`. The month uses its three-letter lowercase name. The detail shows the vendor, customer, project, month, year, hourly rate, weekly line items, and total. Each weekly line item shows its date range and hours. The project is editable, as [Project Edits](project-edits.md) describes.
 
 The detail is a full page. It shows only that invoice and links back to the invoice list. A direct request to an invoice detail URL returns the complete page.
 
@@ -32,7 +32,7 @@ Every page needs a valid session. The app signs users in, as [Access](access.md)
 
 ## Data
 
-The web app reads through the store. The store lists every invoice with its weeks and returns one invoice for a year and month. The web app does not write invoices.
+The web app reads through the store. The store lists every invoice with its weeks and returns one invoice for a year and month. The web app writes only the project, as [Project Edits](project-edits.md) describes.
 
 ## Server
 
@@ -40,9 +40,8 @@ The web app reads through the store. The store lists every invoice with its week
 
 ## Out of Scope
 
-* Project name edits
 * Paid status
 * PDF downloads
 * Invoice email
-* Writes from the web app
+* Writes other than the project edit
 * Containers and deployment

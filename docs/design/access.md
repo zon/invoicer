@@ -1,6 +1,6 @@
 # Access Design
 
-The web app requires sign-in through an OpenID Connect provider. Every page needs a valid session. The provider reports group membership. A user in the admin group or the customer group may sign in. Every signed-in user reads every invoice. The role decides future writes, such as marking an invoice paid.
+The web app requires sign-in through an OpenID Connect provider. Every page needs a valid session. The provider reports group membership. A user in the admin group or the customer group may sign in. Every signed-in user reads every invoice and changes invoice projects, as [Project Edits](project-edits.md) describes. The role decides other writes, such as marking an invoice paid.
 
 ## Groups
 
@@ -90,4 +90,4 @@ Tokens are validated against the provider's published keys. The app uses the aut
 * Refresh tokens and offline access
 * Provider-initiated sign-out
 * API tokens
-* Writes from the web app
+* Other writes from the web app
