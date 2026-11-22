@@ -38,6 +38,9 @@ type Week struct {
 	Hours     float64
 }
 
+// ErrNotFound reports that the store holds no invoice matching a lookup.
+var ErrNotFound = errors.New("invoice not found")
+
 // Store reads and writes invoices in a SQLite database.
 type Store struct {
 	db *gorm.DB
@@ -231,7 +234,53 @@ func (s *Store) Get(id string) (*invoice.Invoice, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading invoice %q: %w", id, err)
 	}
+	return toInvoice(&record), nil
+}
 
+// List returns every stored invoice, newest first by year and month, with its
+// weekly line items.
+func (s *Store) List() ([]*invoice.Invoice, error) {
+	var records []Invoice
+	err := s.db.
+		Preload("Weeks", func(db *gorm.DB) *gorm.DB {
+			return db.Order("start")
+		}).
+		Order("year DESC").
+		Order("month DESC").
+		Find(&records).
+		Error
+	if err != nil {
+		return nil, fmt.Errorf("listing invoices: %w", err)
+	}
+
+	invoices := make([]*invoice.Invoice, 0, len(records))
+	for i := range records {
+		invoices = append(invoices, toInvoice(&records[i]))
+	}
+	return invoices, nil
+}
+
+// GetByMonth returns the invoice for the given year and month. It reports
+// ErrNotFound when that month holds no invoice.
+func (s *Store) GetByMonth(year int, month time.Month) (*invoice.Invoice, error) {
+	var record Invoice
+	err := s.db.
+		Preload("Weeks", func(db *gorm.DB) *gorm.DB {
+			return db.Order("start")
+		}).
+		Where("year = ? AND month = ?", year, int(month)).
+		First(&record).
+		Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("%w for %s %d", ErrNotFound, month, year)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("loading invoice for %s %d: %w", month, year, err)
+	}
+	return toInvoice(&record), nil
+}
+
+func toInvoice(record *Invoice) *invoice.Invoice {
 	inv := &invoice.Invoice{
 		Month:    time.Month(record.Month),
 		Year:     record.Year,
@@ -248,7 +297,7 @@ func (s *Store) Get(id string) (*invoice.Invoice, error) {
 			Hours: w.Hours,
 		})
 	}
-	return inv, nil
+	return inv
 }
 
 func newID() (string, error) {

@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -293,5 +294,121 @@ func TestSaveStoresSeparateMonths(t *testing.T) {
 	}
 	if len(gotSecond.Weeks) != 1 {
 		t.Errorf("second Weeks: got %d, want 1", len(gotSecond.Weeks))
+	}
+}
+
+func TestListReturnsEveryInvoiceNewestFirstWithWeeks(t *testing.T) {
+	s, _ := openTempStore(t)
+
+	older := testInvoice()
+	older.Month = time.October
+	older.Year = 2027
+	older.Project = "Older Project"
+
+	newer := testInvoice()
+	newer.Month = time.January
+	newer.Year = 2028
+	newer.Project = "Newer Project"
+	newer.Weeks = newer.Weeks[:1]
+
+	newest := testInvoice()
+	newest.Month = time.December
+	newest.Year = 2028
+	newest.Project = "Newest Project"
+
+	for _, inv := range []*invoice.Invoice{older, newer, newest} {
+		if _, _, err := s.Save(inv); err != nil {
+			t.Fatalf("Save %q: %v", inv.Project, err)
+		}
+	}
+
+	got, err := s.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	wantProjects := []string{"Newest Project", "Newer Project", "Older Project"}
+	wantWeeks := []int{2, 1, 2}
+	if len(got) != len(wantProjects) {
+		t.Fatalf("Invoices: got %d, want %d", len(got), len(wantProjects))
+	}
+	for i, project := range wantProjects {
+		if got[i].Project != project {
+			t.Errorf("Invoice %d Project: got %q, want %q", i, got[i].Project, project)
+		}
+		if len(got[i].Weeks) != wantWeeks[i] {
+			t.Errorf("%s Weeks: got %d, want %d", project, len(got[i].Weeks), wantWeeks[i])
+		}
+	}
+}
+
+func TestListReturnsEmptyWhenNoInvoices(t *testing.T) {
+	s, _ := openTempStore(t)
+
+	got, err := s.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("Invoices: got %d, want 0", len(got))
+	}
+}
+
+func TestGetByMonthReturnsInvoiceWithWeeks(t *testing.T) {
+	s, _ := openTempStore(t)
+
+	other := testInvoice()
+	other.Month = time.October
+	other.Year = 2027
+	other.Project = "Other Project"
+
+	otherMonth := testInvoice()
+	otherMonth.Month = time.January
+	otherMonth.Year = 2028
+	otherMonth.Project = "Other Month"
+
+	wanted := testInvoice()
+	wanted.Month = time.October
+	wanted.Year = 2028
+	wanted.Project = "Wanted Project"
+
+	for _, inv := range []*invoice.Invoice{other, otherMonth, wanted} {
+		if _, _, err := s.Save(inv); err != nil {
+			t.Fatalf("Save %q: %v", inv.Project, err)
+		}
+	}
+
+	got, err := s.GetByMonth(2028, time.October)
+	if err != nil {
+		t.Fatalf("GetByMonth: %v", err)
+	}
+	if got.Year != wanted.Year || got.Month != wanted.Month {
+		t.Errorf("Month and Year: got %v %d, want %v %d", got.Month, got.Year, wanted.Month, wanted.Year)
+	}
+	if got.Project != wanted.Project {
+		t.Errorf("Project: got %q, want %q", got.Project, wanted.Project)
+	}
+	if len(got.Weeks) != len(wanted.Weeks) {
+		t.Fatalf("Weeks: got %d, want %d", len(got.Weeks), len(wanted.Weeks))
+	}
+	for i := range wanted.Weeks {
+		if !got.Weeks[i].Start.Equal(wanted.Weeks[i].Start) {
+			t.Errorf("Week %d Start: got %v, want %v", i, got.Weeks[i].Start, wanted.Weeks[i].Start)
+		}
+		if !got.Weeks[i].End.Equal(wanted.Weeks[i].End) {
+			t.Errorf("Week %d End: got %v, want %v", i, got.Weeks[i].End, wanted.Weeks[i].End)
+		}
+		if got.Weeks[i].Hours != wanted.Weeks[i].Hours {
+			t.Errorf("Week %d Hours: got %v, want %v", i, got.Weeks[i].Hours, wanted.Weeks[i].Hours)
+		}
+	}
+}
+
+func TestGetByMonthReportsMissingInvoice(t *testing.T) {
+	s, _ := openTempStore(t)
+
+	_, err := s.GetByMonth(2027, time.October)
+	if !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("GetByMonth error: got %v, want %v", err, store.ErrNotFound)
 	}
 }
