@@ -123,6 +123,29 @@ Edited invoice for October 2026: 2f8c1a9b5d3e4f6a7c8b9d0e1f2a3b4c
 
 Changing the customer or project replaces the stored values and keeps the identifier.
 
+## Web App
+
+`invoicer web` starts a read-only web app for the stored invoices. It lists invoices at `/` and shows a selected invoice beside the list.
+
+```
+invoicer web [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--address` | Address the server listens on. Defaults to `:8080`. |
+| `--database` | Path to the invoice database. Defaults to the config value, then `~/.invoicer/invoices.db`. |
+
+The server serves pages, the stylesheet, and htmx from the binary, so it needs no support files. An interrupt stops the server gracefully.
+
+```bash
+# Serve the default database at http://localhost:8080/
+invoicer web
+
+# Serve a different database on another address
+invoicer web --address 127.0.0.1:9000 --database ./work.db
+```
+
 ## Database
 
 The database path comes from `--database`, then the config file, then the default of `~/.invoicer/invoices.db`. Invoicer creates the database file and its parent directory on first use, then migrates the schema.
