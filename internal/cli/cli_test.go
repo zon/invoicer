@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -12,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -101,45 +99,6 @@ oidc:
   clientSecretFile: %s
   cookieKeyFile: %s
 `, issuer, secretPath, keyPath)
-}
-
-// discoveryStub is a local OpenID Connect provider that publishes a discovery
-// document. Tests change metadata to omit an endpoint.
-type discoveryStub struct {
-	server   *httptest.Server
-	metadata map[string]any
-	requests atomic.Int32
-}
-
-func newDiscoveryStub(t *testing.T) *discoveryStub {
-	t.Helper()
-	stub := &discoveryStub{}
-	stub.server = httptest.NewServer(http.HandlerFunc(stub.discovery))
-	t.Cleanup(stub.server.Close)
-	return stub
-}
-
-func (s *discoveryStub) discovery(w http.ResponseWriter, r *http.Request) {
-	s.requests.Add(1)
-
-	metadata := map[string]any{
-		"issuer":                 s.server.URL,
-		"authorization_endpoint": s.server.URL + "/authorize",
-		"token_endpoint":         s.server.URL + "/token",
-		"jwks_uri":               s.server.URL + "/keys",
-	}
-	for key, value := range s.metadata {
-		if value == "" {
-			delete(metadata, key)
-			continue
-		}
-		metadata[key] = value
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(metadata); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
 }
 
 func TestResolveOptions_NoConfig(t *testing.T) {
