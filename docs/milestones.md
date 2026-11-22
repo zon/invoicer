@@ -2,10 +2,6 @@
 
 High level objectives, worked in order. See [process](zpecs/process.md).
 
-## SQLite invoice store
-
-The CLI writes each invoice to a SQLite database. The database stores the invoice fields and its weekly line items. Each invoice has a unique identifier. The database path is configurable. The CLI no longer generates HTML or PDF, and the `--pdf`, `--model`, `pdf`, and `model` options are removed.
-
 ## Invoice web app
 
 A web app lists invoices from the database and renders a selected invoice from its stored data. The list shows the customer, month, project, and total. The app has no login in this milestone.
