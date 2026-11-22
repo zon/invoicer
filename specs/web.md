@@ -107,7 +107,7 @@ When the server starts, the command SHALL print one line that gives the app's lo
 
 The command SHALL report an error and exit non-zero when the database cannot open or the address cannot be used.
 
-An interrupt SHALL stop the server gracefully.
+An interrupt SHALL stop the server gracefully within 10 seconds.
 
 #### Scenario: Default address
 - GIVEN no address is passed
@@ -140,4 +140,5 @@ An interrupt SHALL stop the server gracefully.
 #### Scenario: Interrupt stops the server
 - GIVEN a running server
 - WHEN the process receives an interrupt
-- THEN the server stops and the command exits
+- THEN the server stops within 10 seconds
+- AND the command exits

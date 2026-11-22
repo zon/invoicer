@@ -1,0 +1,17 @@
+- The repository builds a container image from `deploy/container/Containerfile` with Podman from the repository root
+- The image starts `invoicer` as its entrypoint and passes arguments through, so `web` serves the web app and no subcommand generates an invoice
+- The image runs as user and group 1000 with `HOME=/home/invoicer`, creates `/home/invoicer/.invoicer`, sets no database path, exposes port 8080, and holds no config, database, or secret
+- The image reads a mounted config at `/home/invoicer/.invoicer/config.yaml` and a mounted database at the configured path, and works with a read-only root filesystem
+- The image builds from the Go version in `go.mod` and stores invoices in SQLite without a build toolchain at run time
+- The chart provides `deploy/chart/Chart.yaml` and `values.yaml` with the documented defaults, and `helm lint` and `helm template` pass
+- The chart renders one read-only config file at `/home/invoicer/.invoicer/config.yaml` from `config`, `publicURL`, and `access`, with `baseUrl`, the `oidc` settings, and both secret paths
+- The chart mounts the client secret and cookie key from the Secret named by `access.secretName` and renders no secret values
+- The chart creates or reuses a PersistentVolumeClaim at `/data` and runs one web pod with the `Recreate` strategy
+- The web Deployment runs `web` on port 8080 with readiness and liveness probes, runs as user and group 1000 with a read-only root filesystem, and restarts when the config changes
+- The chart creates a ClusterIP Service on `service.port` that forwards to 8080
+- The chart enables a traefik Ingress for `hostname` and a cert-manager Certificate stored in `invoicer-tls` by default, and omits the Certificate when disabled
+- The chart renders an optional CLI Job from `cli.enabled` and `cli.args`, uses the same config and claim as the web app, runs it once on the web pod's node, and removes it after it finishes
+- The chart uses the chart app version for an empty `image.tag` and attaches every `image.pullSecrets` entry to the pod
+- The chart sets a pod grace period that covers the web app's 10 second shutdown timeout
+- Document the image build and chart install in the README
+- Record `deploy/container` and `deploy/chart` in `specs/architecture.yaml`
