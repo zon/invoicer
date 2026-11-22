@@ -18,8 +18,8 @@ type SetConfigCmd struct {
 	// Vendor is the name of the contractor sending the invoice.
 	Vendor string `help:"Name of the contractor sending the invoice."`
 
-	// Customer is the name of the client receiving the invoice.
-	Customer string `help:"Name of the client receiving the invoice."`
+	// Customer is the name of the customer receiving the invoice.
+	Customer string `help:"Name of the customer receiving the invoice."`
 
 	// Project is an optional project name to annotate invoices with.
 	Project string `help:"Name of the project to annotate invoices with."`

@@ -4,15 +4,15 @@ High level objectives. Work through them in order. See [process](zpecs/process.m
 
 ## OIDC access control
 
-The web app signs users in with OIDC. Users in the admin group read every invoice. Client users read the customer's invoices. The web app rejects requests without a valid session. With one customer, the app needs no group-to-customer mapping.
+The web app signs users in with OIDC. Users in the admin group read every invoice. Customer users read the customer's invoices. The web app rejects requests without a valid session. With one customer, the app needs no group-to-customer mapping.
 
-## Client project edits
+## Customer project edits
 
-A client can change the project name on any invoice. The system saves the new name and shows it on the invoice.
+A customer can change the project name on any invoice. The system saves the new name and shows it on the invoice.
 
 ## Paid status
 
-An admin can mark an invoice paid and mark it unpaid again. The invoice list and detail show the paid status. Clients cannot change the status.
+An admin can mark an invoice paid and mark it unpaid again. The invoice list and detail show the paid status. Customers cannot change the status.
 
 ## PDF downloads
 

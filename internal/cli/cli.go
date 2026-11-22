@@ -36,8 +36,8 @@ type GenerateCmd struct {
 	// Vendor is the name of the contractor sending the invoice.
 	Vendor string `short:"v" help:"Name of the contractor sending the invoice. Required without config."`
 
-	// Customer is the name of the client receiving the invoice.
-	Customer string `short:"c" help:"Name of the client receiving the invoice. Required without config."`
+	// Customer is the name of the customer receiving the invoice.
+	Customer string `short:"c" help:"Name of the customer receiving the invoice. Required without config."`
 
 	// Project is an optional project name to annotate the invoice with.
 	Project string `help:"Name of the project to annotate the invoice with."`

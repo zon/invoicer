@@ -28,7 +28,7 @@ invoicer [<month> [<year>]] [options]
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--vendor` | `-v` | Name of the contractor sending the invoice. Required if not set in config. |
-| `--customer` | `-c` | Name of the client receiving the invoice. Required if not set in config. |
+| `--customer` | `-c` | Name of the customer receiving the invoice. Required if not set in config. |
 | `--project` | | Project name to store with the invoice. Optional. |
 | `--database` | | Path to the invoice database. Defaults to `~/.invoicer/invoices.db`. |
 | `--rate` | `-r` | Hourly rate in dollars. Required if not set in config. |
@@ -82,7 +82,7 @@ invoicer set config [options]
 | Option | Description |
 |--------|-------------|
 | `--vendor` | Name of the contractor sending the invoice. |
-| `--customer` | Name of the client receiving the invoice. |
+| `--customer` | Name of the customer receiving the invoice. |
 | `--project` | Project name to store with invoices. |
 | `--database` | Path to the invoice database. |
 | `--rate` | Hourly rate in dollars. |

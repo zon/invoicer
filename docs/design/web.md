@@ -28,7 +28,7 @@ Templates escape stored values. The app never renders an invoice field as raw HT
 
 ## Access
 
-Every request may read every invoice. This milestone has no sign-in.
+Every page needs a valid session. The app signs users in, as [Access](access.md) describes. Every signed-in user reads every invoice.
 
 ## Data
 
@@ -40,7 +40,6 @@ The web app reads through the store. The store lists every invoice with its week
 
 ## Out of Scope
 
-* Sign-in and access control
 * Project name edits
 * Paid status
 * PDF downloads

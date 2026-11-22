@@ -1,13 +1,13 @@
 # Config Design
 
-Config holds user defaults for the CLI. It lives at `~/.invoicer/config.yaml` and uses YAML. The file is optional.
+Config holds user defaults for the CLI. It lives at `~/.invoicer/config.yaml` and uses YAML with camel-case keys. The file is optional. The web app reads extra settings from the same file, as [Access](access.md#configuration) describes.
 
 ## Values
 
 Config holds these values:
 
 * `vendor` — name of the contractor sending invoices
-* `customer` — name of the client receiving invoices
+* `customer` — name of the customer receiving invoices
 * `project` — optional project name
 * `rate` — hourly rate in dollars
 * `hours` — hours worked per week

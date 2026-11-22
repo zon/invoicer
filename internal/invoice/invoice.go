@@ -24,7 +24,7 @@ type Invoice struct {
 	Year int
 	// Vendor is the name of the contractor sending the invoice.
 	Vendor string
-	// Customer is the name of the client receiving the invoice.
+	// Customer is the name of the customer receiving the invoice.
 	Customer string
 	// Project is the optional name of the project this invoice is for.
 	Project string
