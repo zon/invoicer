@@ -49,6 +49,72 @@ func TestContainerfileRunsInvoicerWithArguments(t *testing.T) {
 	}
 }
 
+func runtimeStage(t *testing.T, containerfile string) string {
+	t.Helper()
+	stages := strings.Split(containerfile, "\nFROM ")
+	if len(stages) < 2 {
+		t.Fatal("Containerfile has no runtime stage")
+	}
+	return stages[len(stages)-1]
+}
+
+func TestContainerfileRunsAsUser1000(t *testing.T) {
+	root := repoRoot(t)
+	runtime := runtimeStage(t, readFile(t, filepath.Join(root, "deploy", "container", "Containerfile")))
+
+	if !regexp.MustCompile(`(?m)^USER 1000:1000$`).MatchString(runtime) {
+		t.Fatal("image does not run as user and group 1000")
+	}
+	if !regexp.MustCompile(`(?m)^ENV HOME=/home/invoicer$`).MatchString(runtime) {
+		t.Fatal("image does not set HOME to /home/invoicer")
+	}
+	if !strings.Contains(runtime, "mkdir -p /home/invoicer/.invoicer") {
+		t.Fatal("image does not create /home/invoicer/.invoicer")
+	}
+	if !strings.Contains(runtime, "chown -R 1000:1000 /home/invoicer") {
+		t.Fatal("image does not give user 1000 ownership of /home/invoicer")
+	}
+}
+
+func TestContainerfileSetsNoDatabasePath(t *testing.T) {
+	root := repoRoot(t)
+	runtime := runtimeStage(t, readFile(t, filepath.Join(root, "deploy", "container", "Containerfile")))
+
+	if regexp.MustCompile(`(?mi)^ENV\b.*(?:database|db[_-]?path)`).MatchString(runtime) {
+		t.Fatal("image sets a database path")
+	}
+}
+
+func TestContainerfileExposesPort8080(t *testing.T) {
+	root := repoRoot(t)
+	runtime := runtimeStage(t, readFile(t, filepath.Join(root, "deploy", "container", "Containerfile")))
+
+	if !regexp.MustCompile(`(?m)^EXPOSE 8080$`).MatchString(runtime) {
+		t.Fatal("image does not expose port 8080")
+	}
+}
+
+func TestContainerfileHoldsNoConfigDatabaseOrSecret(t *testing.T) {
+	root := repoRoot(t)
+	runtime := runtimeStage(t, readFile(t, filepath.Join(root, "deploy", "container", "Containerfile")))
+
+	copies := regexp.MustCompile(`(?m)^(?:COPY|ADD)\b.*$`).FindAllString(runtime, -1)
+	if len(copies) != 1 {
+		t.Fatalf("runtime stage copies %d things, want only the binary", len(copies))
+	}
+	if !regexp.MustCompile(`^COPY --from=\S+ /[^ ]*/invoicer /usr/local/bin/invoicer$`).MatchString(copies[0]) {
+		t.Fatalf("runtime stage copies %q instead of only the binary", copies[0])
+	}
+	for _, line := range strings.Split(runtime, "\n") {
+		lower := strings.ToLower(line)
+		for _, held := range []string{"config.yaml", "database", "secret", ".db"} {
+			if strings.Contains(lower, held) {
+				t.Fatalf("runtime stage holds %s: %s", held, line)
+			}
+		}
+	}
+}
+
 func TestContainerfileBuildsFromRepositoryRoot(t *testing.T) {
 	root := repoRoot(t)
 	containerfile := readFile(t, filepath.Join(root, "deploy", "container", "Containerfile"))
