@@ -1,7 +1,7 @@
 # Web Specification
 
 ## Purpose
-The web app lists invoices from the invoice database and renders a selected invoice from its stored data. It does not write invoices.
+The web app lists invoices from the invoice database, renders a selected invoice from its stored data, and changes an invoice's project.
 
 ## Requirements
 
@@ -26,7 +26,7 @@ The total SHALL follow [Invoice Amount](invoices.md#requirement-invoice-amount).
 - THEN the page shows an empty list
 
 ### Requirement: Invoice Detail
-The detail address SHALL use the year and three-letter lowercase month name, like `/2027/oct`. The detail SHALL show vendor, customer, project when set, month, year, hourly rate, every weekly line item, and total. Each weekly line item SHALL show its date range and hours.
+The detail address SHALL use the year and three-letter lowercase month name, like `/2027/oct`. The detail SHALL show vendor, customer, project when set, month, year, hourly rate, every weekly line item, and total. Each weekly line item SHALL show its date range and hours. The detail SHALL show the project edit form, as [Project Edits](project-edits.md#requirement-project-edit-form) describes.
 
 The detail SHALL be a full page. It SHALL show only the invoice and SHALL link back to the invoice list.
 
@@ -78,8 +78,8 @@ The app SHALL escape stored values in every response. It SHALL never render an i
 - THEN the page shows the name as text
 - AND the browser runs no script
 
-### Requirement: Read Access
-The app SHALL require a valid session for every page and SHALL allow every signed-in user to read every invoice. It SHALL NOT change stored invoices. Sign-in, roles, sessions, and access configuration SHALL follow [Access](access.md).
+### Requirement: Invoice Access
+The app SHALL require a valid session for every page and SHALL allow every signed-in user to read every invoice. It SHALL NOT change stored invoices except the project, as [Project Edits](project-edits.md) describes. Sign-in, roles, sessions, and access configuration SHALL follow [Access](access.md).
 
 #### Scenario: Signed-in user reads the list
 - GIVEN a signed-in admin or customer user

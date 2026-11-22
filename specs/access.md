@@ -1,7 +1,7 @@
 # Access Specification
 
 ## Purpose
-Sign-in and read access for the invoice web app. The app signs users in through an OpenID Connect provider and gives every signed-in user read access to every stored invoice.
+Sign-in and invoice access for the invoice web app. The app signs users in through an OpenID Connect provider and gives every signed-in user access to every stored invoice.
 
 ## Requirements
 
@@ -157,8 +157,8 @@ A session SHALL last 12 hours and SHALL NOT renew. A missing, expired, or invali
 - THEN the app clears the session
 - AND the app sends the user to `/login`
 
-### Requirement: Read Access
-Every signed-in user SHALL read every stored invoice. The list and detail SHALL show the same invoices to admin and customer users. A signed-in user SHALL NOT change stored invoices.
+### Requirement: Invoice Access
+Every signed-in user SHALL read every stored invoice. The list and detail SHALL show the same invoices to admin and customer users. Every signed-in user SHALL change the project on any stored invoice, as [Project Edits](project-edits.md) describes. A signed-in user SHALL NOT change any other stored value.
 
 An unknown invoice SHALL return 404, as [Web](web.md#requirement-missing-invoice) describes.
 
@@ -176,6 +176,16 @@ An unknown invoice SHALL return 404, as [Web](web.md#requirement-missing-invoice
 - GIVEN a signed-in customer user and a stored invoice
 - WHEN its detail is requested
 - THEN the detail shows that invoice
+
+#### Scenario: Customer edits a project
+- GIVEN a signed-in customer user and a stored invoice
+- WHEN the customer posts a new project
+- THEN the app saves the project
+
+#### Scenario: Admin edits a project
+- GIVEN a signed-in admin user and a stored invoice
+- WHEN the admin posts a new project
+- THEN the app saves the project
 
 ### Requirement: Signed-In Header
 Every page shown to a signed-in user SHALL show the user's email and a sign-out link.

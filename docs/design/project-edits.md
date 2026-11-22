@@ -12,7 +12,7 @@ The store sets the project for a year and month in one statement. It touches onl
 
 ## Form
 
-The detail page shows the project in a form with a text input and a Save button. The input starts with the current project. The form posts one `project` field to `/2027/oct/project`.
+The detail page shows the project in a form with a text input and a Save button. The input starts with the current project. The form posts one `project` field to the detail path, like `/2027/oct`.
 
 The app trims whitespace around the value. An empty value clears the project.
 
@@ -20,7 +20,7 @@ The app trims whitespace around the value. An empty value clears the project.
 
 A saved edit redirects to the detail page with 303. The page shows the new project. The invoice list shows the new project on the next request.
 
-A POST for an unknown year or month returns 404. A failed store write returns an error and leaves the invoice unchanged.
+A POST for an unknown year or month returns 404. A failed store write returns an error and leaves the invoice unchanged. A POST without a session goes to sign-in, which returns to the detail page without the edit.
 
 ## Safety
 

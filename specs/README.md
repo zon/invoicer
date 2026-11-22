@@ -1,6 +1,7 @@
 # Specs
 
-- [Access](access.md) — OIDC sign-in, sessions, and read access for the web app.
+- [Access](access.md) — OIDC sign-in, sessions, and invoice access for the web app.
 - [Config](config.md) — YAML defaults for invoice generation and the database path.
 - [Invoices](invoices.md) — invoice storage and generation.
-- [Web](web.md) — the read-only invoice web app.
+- [Project Edits](project-edits.md) — changing the project on a stored invoice from the web app.
+- [Web](web.md) — the invoice web app.
