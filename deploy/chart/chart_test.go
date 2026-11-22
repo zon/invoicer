@@ -1,10 +1,13 @@
 package chart_test
 
 import (
+	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -169,6 +172,198 @@ func TestValuesDefaults(t *testing.T) {
 	if len(v.CLI.Args) != 0 {
 		t.Fatalf("cli.args: got %v, want empty", v.CLI.Args)
 	}
+}
+
+type renderedConfig struct {
+	Vendor   string  `yaml:"vendor"`
+	Customer string  `yaml:"customer"`
+	Project  string  `yaml:"project"`
+	Rate     float64 `yaml:"rate"`
+	Hours    float64 `yaml:"hours"`
+	Database string  `yaml:"database"`
+	BaseURL  string  `yaml:"baseUrl"`
+	OIDC     struct {
+		Issuer           string `yaml:"issuer"`
+		ClientID         string `yaml:"clientId"`
+		ClientSecretFile string `yaml:"clientSecretFile"`
+		CookieKeyFile    string `yaml:"cookieKeyFile"`
+		AdminGroup       string `yaml:"adminGroup"`
+		CustomerGroup    string `yaml:"customerGroup"`
+		GroupsClaim      string `yaml:"groupsClaim"`
+	} `yaml:"oidc"`
+}
+
+func renderChart(t *testing.T, args ...string) []map[string]any {
+	t.Helper()
+	helm, err := exec.LookPath("helm")
+	if err != nil {
+		t.Skip("helm is not installed")
+	}
+
+	command := append([]string{"template", "invoicer", chartDir(t)}, args...)
+	output, err := exec.Command(helm, command...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("helm %v: %v\n%s", command, err, output)
+	}
+	return parseManifests(t, string(output))
+}
+
+func parseManifests(t *testing.T, text string) []map[string]any {
+	t.Helper()
+	decoder := yaml.NewDecoder(strings.NewReader(text))
+	var manifests []map[string]any
+	for {
+		var manifest map[string]any
+		err := decoder.Decode(&manifest)
+		if errors.Is(err, io.EOF) {
+			return manifests
+		}
+		if err != nil {
+			t.Fatalf("parsing rendered manifest: %v", err)
+		}
+		if len(manifest) > 0 {
+			manifests = append(manifests, manifest)
+		}
+	}
+}
+
+func findKind(t *testing.T, manifests []map[string]any, kind string) map[string]any {
+	t.Helper()
+	for _, manifest := range manifests {
+		if manifest["kind"] == kind {
+			return manifest
+		}
+	}
+	t.Fatalf("chart renders no %s", kind)
+	return nil
+}
+
+func configFile(t *testing.T, manifests []map[string]any) string {
+	t.Helper()
+	configMap := findKind(t, manifests, "ConfigMap")
+	data, ok := configMap["data"].(map[string]any)
+	if !ok {
+		t.Fatal("config map has no data")
+	}
+	if len(data) != 1 {
+		t.Fatalf("config map holds %d files, want one", len(data))
+	}
+	text, ok := data["config.yaml"].(string)
+	if !ok {
+		t.Fatal("config map does not hold config.yaml")
+	}
+	return text
+}
+
+func decodeRenderedConfig(t *testing.T, text string) renderedConfig {
+	t.Helper()
+	var cfg renderedConfig
+	if err := yaml.Unmarshal([]byte(text), &cfg); err != nil {
+		t.Fatalf("parsing rendered config: %v", err)
+	}
+	return cfg
+}
+
+func TestConfigRendering(t *testing.T) {
+	cfg := decodeRenderedConfig(t, configFile(t, renderChart(t)))
+
+	equal(t, "vendor", cfg.Vendor, "Jane Smith")
+	equal(t, "customer", cfg.Customer, "Acme Corp")
+	equal(t, "project", cfg.Project, "Website Redesign")
+	equal(t, "rate", cfg.Rate, 150)
+	equal(t, "hours", cfg.Hours, 40)
+	equal(t, "database", cfg.Database, "/data/invoices.db")
+	equal(t, "baseUrl", cfg.BaseURL, "https://invoices.haralovich.com")
+
+	equal(t, "oidc.issuer", cfg.OIDC.Issuer, "https://id.haralovich.org")
+	equal(t, "oidc.clientId", cfg.OIDC.ClientID, "invoicer")
+	equal(t, "oidc.clientSecretFile", cfg.OIDC.ClientSecretFile, "/run/secrets/oidc-client-secret")
+	equal(t, "oidc.cookieKeyFile", cfg.OIDC.CookieKeyFile, "/run/secrets/cookie-key")
+	equal(t, "oidc.adminGroup", cfg.OIDC.AdminGroup, "invoicer-admins")
+	equal(t, "oidc.customerGroup", cfg.OIDC.CustomerGroup, "invoicer-customers")
+	equal(t, "oidc.groupsClaim", cfg.OIDC.GroupsClaim, "groups")
+}
+
+func TestConfigRenderingUsesValues(t *testing.T) {
+	manifests := renderChart(t,
+		"--set", "config.vendor=Grace Hopper",
+		"--set", "config.customer=Compilers Inc",
+		"--set", "config.project=",
+		"--set", "config.rate=200",
+		"--set", "config.hours=32",
+		"--set", "config.database=",
+		"--set", "publicURL=https://billing.example.com",
+		"--set", "access.issuer=https://login.example.com",
+		"--set", "access.clientId=example",
+		"--set", "access.adminGroup=billing-admins",
+		"--set", "access.customerGroup=billing-customers",
+		"--set", "access.groupsClaim=roles",
+	)
+	cfg := decodeRenderedConfig(t, configFile(t, manifests))
+
+	equal(t, "vendor", cfg.Vendor, "Grace Hopper")
+	equal(t, "customer", cfg.Customer, "Compilers Inc")
+	equal(t, "project", cfg.Project, "")
+	equal(t, "rate", cfg.Rate, 200)
+	equal(t, "hours", cfg.Hours, 32)
+	equal(t, "database", cfg.Database, "/data/invoices.db")
+	equal(t, "baseUrl", cfg.BaseURL, "https://billing.example.com")
+	equal(t, "oidc.issuer", cfg.OIDC.Issuer, "https://login.example.com")
+	equal(t, "oidc.clientId", cfg.OIDC.ClientID, "example")
+	equal(t, "oidc.adminGroup", cfg.OIDC.AdminGroup, "billing-admins")
+	equal(t, "oidc.customerGroup", cfg.OIDC.CustomerGroup, "billing-customers")
+	equal(t, "oidc.groupsClaim", cfg.OIDC.GroupsClaim, "roles")
+}
+
+func TestConfigMountIsReadOnly(t *testing.T) {
+	const configPath = "/home/invoicer/.invoicer/config.yaml"
+	manifests := renderChart(t)
+	configMap := findKind(t, manifests, "ConfigMap")
+	deployment := findKind(t, manifests, "Deployment")
+
+	configName, _ := configMap["metadata"].(map[string]any)["name"].(string)
+	if configName == "" {
+		t.Fatal("config map has no name")
+	}
+
+	podSpec := deployment["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
+	containers := podSpec["containers"].([]any)
+	if len(containers) != 1 {
+		t.Fatalf("deployment runs %d containers, want one", len(containers))
+	}
+	mounts, _ := containers[0].(map[string]any)["volumeMounts"].([]any)
+
+	var volumeName string
+	for _, value := range mounts {
+		mount := value.(map[string]any)
+		if mount["mountPath"] != configPath {
+			continue
+		}
+		if mount["readOnly"] != true {
+			t.Fatal("config file is not mounted read-only")
+		}
+		volumeName, _ = mount["name"].(string)
+	}
+	if volumeName == "" {
+		t.Fatalf("deployment mounts no file at %s", configPath)
+	}
+
+	volumes := podSpec["volumes"].([]any)
+	for _, value := range volumes {
+		volume := value.(map[string]any)
+		if volume["name"] != volumeName {
+			continue
+		}
+		source, _ := volume["configMap"].(map[string]any)
+		if source["name"] != configName {
+			t.Fatalf("volume %s reads config map %v, want %s", volumeName, source["name"], configName)
+		}
+		if source["defaultMode"] != 0o444 {
+			t.Fatalf("config file mode: got %v, want 0444", source["defaultMode"])
+		}
+		return
+	}
+	t.Fatalf("deployment has no volume named %s", volumeName)
 }
 
 func TestHelmLintAndTemplate(t *testing.T) {

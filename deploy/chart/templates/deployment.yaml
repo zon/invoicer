@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "invoicer.fullname" . }}
+  labels:
+    {{- include "invoicer.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "invoicer.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "invoicer.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: web
+          image: {{ include "invoicer.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - web
+          volumeMounts:
+            - name: config
+              mountPath: /home/invoicer/.invoicer/config.yaml
+              subPath: config.yaml
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "invoicer.fullname" . }}-config
+            defaultMode: 0444
