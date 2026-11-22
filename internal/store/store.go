@@ -65,6 +65,9 @@ func Open(path string) (*Store, error) {
 	if err := db.AutoMigrate(&Invoice{}, &Week{}); err != nil {
 		return nil, fmt.Errorf("migrating database: %w", err)
 	}
+	if err := ensureOneInvoicePerMonth(db); err != nil {
+		return nil, fmt.Errorf("enforcing one invoice per month: %w", err)
+	}
 
 	return &Store{db: db}, nil
 }
@@ -76,6 +79,47 @@ func (s *Store) Close() error {
 		return fmt.Errorf("getting database connection: %w", err)
 	}
 	return db.Close()
+}
+
+const monthIndex = "idx_invoices_year_month"
+
+// ensureOneInvoicePerMonth keeps the most recently created invoice for each
+// year and month, removes the other invoices and their weeks, and constrains
+// the table so a month holds one invoice.
+func ensureOneInvoicePerMonth(db *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := removeDuplicateInvoices(tx); err != nil {
+			return err
+		}
+		return createMonthIndex(tx)
+	})
+}
+
+func removeDuplicateInvoices(tx *gorm.DB) error {
+	invoices := tx.Config.NamingStrategy.TableName("Invoice")
+	weeks := tx.Config.NamingStrategy.TableName("Week")
+	duplicates := fmt.Sprintf(
+		"SELECT id FROM %s WHERE rowid NOT IN (SELECT MAX(rowid) FROM %s GROUP BY year, month)",
+		invoices,
+		invoices,
+	)
+
+	if err := tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE invoice_id IN (%s)", weeks, duplicates)).Error; err != nil {
+		return fmt.Errorf("removing duplicate invoice weeks: %w", err)
+	}
+	if err := tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE id IN (%s)", invoices, duplicates)).Error; err != nil {
+		return fmt.Errorf("removing duplicate invoices: %w", err)
+	}
+	return nil
+}
+
+func createMonthIndex(tx *gorm.DB) error {
+	invoices := tx.Config.NamingStrategy.TableName("Invoice")
+	statement := fmt.Sprintf("CREATE UNIQUE INDEX IF NOT EXISTS %s ON %s (year, month)", monthIndex, invoices)
+	if err := tx.Exec(statement).Error; err != nil {
+		return fmt.Errorf("creating monthly invoice index: %w", err)
+	}
+	return nil
 }
 
 // Save stores an invoice and its weekly line items and returns the invoice
