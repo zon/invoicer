@@ -79,9 +79,9 @@ func (s *Store) Close() error {
 }
 
 // Save stores an invoice and its weekly line items and returns the invoice
-// identifier and whether the invoice was newly created. Saving the same
-// customer, year, month, and project again replaces the stored invoice and
-// keeps its identifier.
+// identifier and whether the invoice was newly created. Saving an invoice for
+// an existing year and month replaces the stored invoice, including its
+// customer and project, and keeps its identifier.
 func (s *Store) Save(inv *invoice.Invoice) (string, bool, error) {
 	var id string
 	created := false
@@ -89,10 +89,7 @@ func (s *Store) Save(inv *invoice.Invoice) (string, bool, error) {
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var existing Invoice
 		err := tx.
-			Where(
-				"customer = ? AND year = ? AND month = ? AND project = ?",
-				inv.Customer, inv.Year, int(inv.Month), inv.Project,
-			).
+			Where("year = ? AND month = ?", inv.Year, int(inv.Month)).
 			First(&existing).
 			Error
 

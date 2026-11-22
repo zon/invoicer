@@ -129,6 +129,8 @@ func TestSaveKeepsIdentifierAndReplacesStoredInvoice(t *testing.T) {
 
 	updated := testInvoice()
 	updated.Vendor = "New Vendor"
+	updated.Customer = "Globex"
+	updated.Project = "Mobile App"
 	updated.Rate = 200
 	updated.Weeks = []invoice.Week{
 		{
@@ -155,6 +157,12 @@ func TestSaveKeepsIdentifierAndReplacesStoredInvoice(t *testing.T) {
 	}
 	if got.Vendor != updated.Vendor {
 		t.Errorf("Vendor: got %q, want %q", got.Vendor, updated.Vendor)
+	}
+	if got.Customer != updated.Customer {
+		t.Errorf("Customer: got %q, want %q", got.Customer, updated.Customer)
+	}
+	if got.Project != updated.Project {
+		t.Errorf("Project: got %q, want %q", got.Project, updated.Project)
 	}
 	if got.Rate != updated.Rate {
 		t.Errorf("Rate: got %v, want %v", got.Rate, updated.Rate)
@@ -202,11 +210,55 @@ func TestSavePersistsAcrossReopen(t *testing.T) {
 	}
 }
 
-func TestSaveStoresSeparateInvoices(t *testing.T) {
+func TestSaveReplacesInvoiceWhenCustomerOrProjectDiffers(t *testing.T) {
+	changes := map[string]func(*invoice.Invoice){
+		"customer": func(inv *invoice.Invoice) { inv.Customer = "Globex" },
+		"project":  func(inv *invoice.Invoice) { inv.Project = "Mobile App" },
+	}
+
+	for name, change := range changes {
+		t.Run(name, func(t *testing.T) {
+			s, _ := openTempStore(t)
+
+			id, _, err := s.Save(testInvoice())
+			if err != nil {
+				t.Fatalf("Save original: %v", err)
+			}
+
+			updated := testInvoice()
+			change(updated)
+
+			updatedID, created, err := s.Save(updated)
+			if err != nil {
+				t.Fatalf("Save updated: %v", err)
+			}
+			if created {
+				t.Error("expected an existing invoice to report not created")
+			}
+			if updatedID != id {
+				t.Fatalf("identifier changed: got %q, want %q", updatedID, id)
+			}
+
+			got, err := s.Get(id)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if got.Customer != updated.Customer {
+				t.Errorf("Customer: got %q, want %q", got.Customer, updated.Customer)
+			}
+			if got.Project != updated.Project {
+				t.Errorf("Project: got %q, want %q", got.Project, updated.Project)
+			}
+		})
+	}
+}
+
+func TestSaveStoresSeparateMonths(t *testing.T) {
 	s, _ := openTempStore(t)
 
 	first := testInvoice()
 	second := testInvoice()
+	second.Month = time.February
 	second.Project = "Mobile App"
 	second.Weeks = second.Weeks[:1]
 
