@@ -4,6 +4,7 @@ package store
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -75,12 +76,49 @@ func (s *Store) Close() error {
 }
 
 // Save stores an invoice and its weekly line items and returns the invoice identifier.
+// Saving the same customer, year, month, and project again replaces the stored
+// invoice and keeps its identifier.
 func (s *Store) Save(inv *invoice.Invoice) (string, error) {
-	id, err := newID()
+	var id string
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var existing Invoice
+		err := tx.
+			Where(
+				"customer = ? AND year = ? AND month = ? AND project = ?",
+				inv.Customer, inv.Year, int(inv.Month), inv.Project,
+			).
+			First(&existing).
+			Error
+
+		switch {
+		case err == nil:
+			id = existing.ID
+			if err := updateInvoice(tx, id, inv); err != nil {
+				return err
+			}
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			newInvoiceID, err := newID()
+			if err != nil {
+				return err
+			}
+			id = newInvoiceID
+			if err := createInvoice(tx, id, inv); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("looking up invoice: %w", err)
+		}
+
+		return replaceWeeks(tx, id, inv.Weeks)
+	})
 	if err != nil {
 		return "", err
 	}
+	return id, nil
+}
 
+func createInvoice(tx *gorm.DB, id string, inv *invoice.Invoice) error {
 	record := &Invoice{
 		ID:       id,
 		Month:    int(inv.Month),
@@ -89,20 +127,49 @@ func (s *Store) Save(inv *invoice.Invoice) (string, error) {
 		Customer: inv.Customer,
 		Project:  inv.Project,
 		Rate:     inv.Rate,
-		Weeks:    make([]Week, 0, len(inv.Weeks)),
 	}
-	for _, w := range inv.Weeks {
-		record.Weeks = append(record.Weeks, Week{
-			Start: w.Start,
-			End:   w.End,
-			Hours: w.Hours,
-		})
+	if err := tx.Create(record).Error; err != nil {
+		return fmt.Errorf("saving invoice: %w", err)
+	}
+	return nil
+}
+
+func updateInvoice(tx *gorm.DB, id string, inv *invoice.Invoice) error {
+	updates := map[string]any{
+		"month":    int(inv.Month),
+		"year":     inv.Year,
+		"vendor":   inv.Vendor,
+		"customer": inv.Customer,
+		"project":  inv.Project,
+		"rate":     inv.Rate,
+	}
+	if err := tx.Model(&Invoice{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		return fmt.Errorf("updating invoice: %w", err)
+	}
+	return nil
+}
+
+func replaceWeeks(tx *gorm.DB, id string, weeks []invoice.Week) error {
+	if err := tx.Where("invoice_id = ?", id).Delete(&Week{}).Error; err != nil {
+		return fmt.Errorf("replacing invoice weeks: %w", err)
+	}
+	if len(weeks) == 0 {
+		return nil
 	}
 
-	if err := s.db.Create(record).Error; err != nil {
-		return "", fmt.Errorf("saving invoice: %w", err)
+	records := make([]Week, 0, len(weeks))
+	for _, w := range weeks {
+		records = append(records, Week{
+			InvoiceID: id,
+			Start:     w.Start,
+			End:       w.End,
+			Hours:     w.Hours,
+		})
 	}
-	return id, nil
+	if err := tx.Create(&records).Error; err != nil {
+		return fmt.Errorf("saving invoice weeks: %w", err)
+	}
+	return nil
 }
 
 // Get returns the invoice with the given identifier.

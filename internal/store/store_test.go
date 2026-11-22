@@ -116,6 +116,57 @@ func TestSaveStoresInvoiceAndWeeks(t *testing.T) {
 	}
 }
 
+func TestSaveKeepsIdentifierAndReplacesStoredInvoice(t *testing.T) {
+	s, _ := openTempStore(t)
+
+	id, err := s.Save(testInvoice())
+	if err != nil {
+		t.Fatalf("Save original: %v", err)
+	}
+
+	updated := testInvoice()
+	updated.Vendor = "New Vendor"
+	updated.Rate = 200
+	updated.Weeks = []invoice.Week{
+		{
+			Start: time.Date(2025, time.January, 13, 0, 0, 0, 0, time.UTC),
+			End:   time.Date(2025, time.January, 19, 0, 0, 0, 0, time.UTC),
+			Hours: 12,
+		},
+	}
+
+	updatedID, err := s.Save(updated)
+	if err != nil {
+		t.Fatalf("Save updated: %v", err)
+	}
+	if updatedID != id {
+		t.Fatalf("identifier changed: got %q, want %q", updatedID, id)
+	}
+
+	got, err := s.Get(id)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Vendor != updated.Vendor {
+		t.Errorf("Vendor: got %q, want %q", got.Vendor, updated.Vendor)
+	}
+	if got.Rate != updated.Rate {
+		t.Errorf("Rate: got %v, want %v", got.Rate, updated.Rate)
+	}
+	if len(got.Weeks) != len(updated.Weeks) {
+		t.Fatalf("Weeks: got %d, want %d", len(got.Weeks), len(updated.Weeks))
+	}
+	if !got.Weeks[0].Start.Equal(updated.Weeks[0].Start) {
+		t.Errorf("Week Start: got %v, want %v", got.Weeks[0].Start, updated.Weeks[0].Start)
+	}
+	if !got.Weeks[0].End.Equal(updated.Weeks[0].End) {
+		t.Errorf("Week End: got %v, want %v", got.Weeks[0].End, updated.Weeks[0].End)
+	}
+	if got.Weeks[0].Hours != updated.Weeks[0].Hours {
+		t.Errorf("Week Hours: got %v, want %v", got.Weeks[0].Hours, updated.Weeks[0].Hours)
+	}
+}
+
 func TestSavePersistsAcrossReopen(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "invoices.db")
 	s, err := store.Open(path)
