@@ -121,8 +121,8 @@ An interrupt SHALL stop the server gracefully.
 
 #### Scenario: Binary needs no support files
 - GIVEN the binary alone in an empty directory and a valid access configuration
-- WHEN the server starts
-- THEN pages and the stylesheet load
+- WHEN a signed-in user requests pages and the stylesheet
+- THEN they load
 
 #### Scenario: Database cannot open
 - GIVEN a database path that cannot be opened

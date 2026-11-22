@@ -35,7 +35,7 @@ The app keeps state, nonce, and the PKCE verifier in a short-lived signed cookie
 
 The app requires the email claim and rejects an email the provider marks unverified. A user in neither group fails sign-in.
 
-A failed sign-in sets no session and returns 401 with a complete HTML page and a link to try again.
+A failed sign-in sets no session and returns 401 with a complete HTML page and a link to try again. When the email is unverified, the page says so.
 
 ## Session
 
@@ -45,7 +45,7 @@ A missing, expired, or invalid cookie counts as no session. The app sends the us
 
 `/logout` clears the session and sends the user to `/login`.
 
-The signed-in email and a sign-out link show on every page. The stylesheet needs no session, so the sign-in page can load it.
+The signed-in email and a sign-out link show on every page. Every route except `/login`, `/callback`, and `/logout` requires a session, including the stylesheet. The failed sign-in page carries its own inline styles.
 
 ## Configuration
 

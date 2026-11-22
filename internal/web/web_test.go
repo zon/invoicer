@@ -129,7 +129,7 @@ func TestRequestsWithoutSessionGoToLogin(t *testing.T) {
 		Rate:     100,
 	}
 
-	for _, path := range []string{"/", "/2027/oct"} {
+	for _, path := range []string{"/", "/2027/oct", "/style.css", "/unknown"} {
 		t.Run(path, func(t *testing.T) {
 			recorder := getWithAccess(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, &fakeAccess{}, path)
 
@@ -151,8 +151,25 @@ func TestRequestsWithoutSessionGoToLogin(t *testing.T) {
 	}
 }
 
-func TestStylesheetLoadsWithoutSession(t *testing.T) {
+func TestStylesheetRequiresSession(t *testing.T) {
 	recorder := getWithAccess(t, &fakeStore{}, &fakeAccess{}, "/style.css")
+
+	if recorder.Code != http.StatusFound {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusFound)
+	}
+	if location := recorder.Header().Get("Location"); location != "/login?next=%2Fstyle.css" {
+		t.Errorf("location: got %q, want %q", location, "/login?next=%2Fstyle.css")
+	}
+}
+
+func TestSignedInUserLoadsStylesheet(t *testing.T) {
+	user := &access.User{
+		Email:   "jane@example.com",
+		Role:    access.Customer,
+		Expires: time.Now().Add(time.Hour),
+	}
+
+	recorder := getWithAccess(t, &fakeStore{}, &fakeAccess{user: user}, "/style.css")
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)

@@ -688,8 +688,11 @@ func TestWebRunRequiresSignInWithAccessSettings(t *testing.T) {
 
 	stylesheet := httptest.NewRecorder()
 	handler.ServeHTTP(stylesheet, httptest.NewRequest(http.MethodGet, "/style.css", nil))
-	if stylesheet.Code != http.StatusOK {
-		t.Errorf("stylesheet status: got %d, want %d", stylesheet.Code, http.StatusOK)
+	if stylesheet.Code != http.StatusFound {
+		t.Errorf("stylesheet status: got %d, want %d", stylesheet.Code, http.StatusFound)
+	}
+	if location := stylesheet.Header().Get("Location"); location != "/login?next=%2Fstyle.css" {
+		t.Errorf("stylesheet location: got %q, want %q", location, "/login?next=%2Fstyle.css")
 	}
 }
 

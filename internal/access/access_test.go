@@ -345,10 +345,6 @@ func TestCallbackRejectsFailedSignIns(t *testing.T) {
 			claims: map[string]any{"email_verified": true, "groups": []string{"admins"}},
 		},
 		{
-			name:   "unverified email",
-			claims: map[string]any{"email": "jane@example.com", "email_verified": false, "groups": []string{"admins"}},
-		},
-		{
 			name:   "nonce does not match",
 			claims: map[string]any{"email": "jane@example.com", "email_verified": true, "groups": []string{"admins"}},
 			nonce:  "another-nonce",
@@ -411,6 +407,34 @@ func TestCallbackRejectsFailedSignIns(t *testing.T) {
 			assertNoSessionCookie(t, recorder)
 		})
 	}
+}
+
+func TestCallbackExplainsUnverifiedEmail(t *testing.T) {
+	stub := newProviderStub(t)
+	a := newTestAccess(t, stub)
+	router := testRouter(a)
+
+	authURL, signInCookie, _ := startSignIn(t, a, router, "/")
+	recorder := completeSignIn(t, stub, router, authURL, signInCookie, map[string]any{
+		"email":          "jane@example.com",
+		"email_verified": false,
+		"groups":         []string{"admins"},
+	})
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "Email not verified") {
+		t.Errorf("page does not say the email is unverified: %q", body)
+	}
+	if strings.Contains(body, "Sign-in failed") {
+		t.Errorf("page shows the generic sign-in failure: %q", body)
+	}
+	if !strings.Contains(body, `href="/login"`) || !strings.Contains(body, "Try again") {
+		t.Errorf("page does not link to try again: %q", body)
+	}
+	assertNoSessionCookie(t, recorder)
 }
 
 func TestExpiredSessionCountsAsNoSession(t *testing.T) {

@@ -70,14 +70,15 @@ func New(s Store, a ...Access) *Server {
 		access: auth,
 	}
 	server.SetHTMLTemplate(template.Must(template.ParseFS(templateFiles, "templates/*.html")))
+	server.Use(server.requireUser)
 	server.GET("/style.css", server.stylesheet)
 	if auth != nil {
 		server.GET("/login", auth.Login)
 		server.GET("/callback", auth.Callback)
 		server.GET("/logout", auth.Logout)
 	}
-	server.GET("/", server.requireUser, server.index)
-	server.GET("/:year/:month", server.requireUser, server.show)
+	server.GET("/", server.index)
+	server.GET("/:year/:month", server.show)
 	return server
 }
 
@@ -135,10 +136,16 @@ func (s *Server) stylesheet(c *gin.Context) {
 	c.Data(http.StatusOK, "text/css; charset=utf-8", styleCSS)
 }
 
-// requireUser sends a request without a session to sign-in and keeps the page
-// it asked for. Without access configured the app serves pages without sign-in.
+// requireUser sends every request except the auth endpoints to sign-in when it
+// has no session. Without access configured the app serves every route without
+// sign-in.
 func (s *Server) requireUser(c *gin.Context) {
 	if s.access == nil {
+		c.Next()
+		return
+	}
+	switch c.Request.URL.Path {
+	case "/login", "/callback", "/logout":
 		c.Next()
 		return
 	}

@@ -64,6 +64,11 @@ const (
 	defaultGroupsClaim   = "groups"
 )
 
+var (
+	errSignInFailed    = errors.New("sign-in failed")
+	errEmailUnverified = errors.New("email is not verified")
+)
+
 // Access discovers the provider and handles sign-in, sign-out, and sessions.
 type Access struct {
 	oauth         *oauth2.Config
@@ -269,9 +274,9 @@ func (a *Access) Callback(c *gin.Context) {
 		return
 	}
 
-	user, ok := a.userFromToken(c.Request.Context(), token, state.Nonce)
-	if !ok {
-		a.fail(c)
+	user, err := a.userFromToken(c.Request.Context(), token, state.Nonce)
+	if err != nil {
+		a.failWith(c, err)
 		return
 	}
 
@@ -302,41 +307,41 @@ func (a *Access) readSignIn(c *gin.Context) (signInState, bool) {
 	return state, true
 }
 
-func (a *Access) userFromToken(ctx context.Context, token *oauth2.Token, nonce string) (User, bool) {
+func (a *Access) userFromToken(ctx context.Context, token *oauth2.Token, nonce string) (User, error) {
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok || rawIDToken == "" {
-		return User{}, false
+		return User{}, errSignInFailed
 	}
 
 	idToken, err := a.verifier.Verify(ctx, rawIDToken)
 	if err != nil {
-		return User{}, false
+		return User{}, errSignInFailed
 	}
 	if subtle.ConstantTimeCompare([]byte(idToken.Nonce), []byte(nonce)) != 1 {
-		return User{}, false
+		return User{}, errSignInFailed
 	}
 
 	var claims map[string]any
 	if err := idToken.Claims(&claims); err != nil {
-		return User{}, false
+		return User{}, errSignInFailed
 	}
 	email, _ := claims["email"].(string)
 	if email == "" {
-		return User{}, false
+		return User{}, errSignInFailed
 	}
 	if verified, marked := claims["email_verified"].(bool); marked && !verified {
-		return User{}, false
+		return User{}, errEmailUnverified
 	}
 
 	role, ok := a.role(groupsFrom(claims[a.groupsClaim]))
 	if !ok {
-		return User{}, false
+		return User{}, errSignInFailed
 	}
 	return User{
 		Email:   email,
 		Role:    role,
 		Expires: a.now().Add(sessionDuration),
-	}, true
+	}, nil
 }
 
 func (a *Access) role(groups []string) (Role, bool) {
@@ -413,9 +418,23 @@ func (a *Access) clearCookie(c *gin.Context, name string) {
 }
 
 func (a *Access) fail(c *gin.Context) {
-	a.clearCookie(c, signInCookieName)
-	c.Data(http.StatusUnauthorized, "text/html; charset=utf-8", []byte(failedSignInPage))
+	a.failWith(c, nil)
 }
+
+func (a *Access) failWith(c *gin.Context, reason error) {
+	a.clearCookie(c, signInCookieName)
+	page := failedSignInPage
+	if errors.Is(reason, errEmailUnverified) {
+		page = unverifiedEmailPage
+	}
+	c.Data(http.StatusUnauthorized, "text/html; charset=utf-8", []byte(page))
+}
+
+const pageStyle = `<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; line-height: 1.5; margin: 2rem auto; max-width: 40rem; padding: 0 1rem; }
+  header h1 { margin: 0 0 1rem; }
+</style>`
 
 const failedSignInPage = `<!doctype html>
 <html lang="en">
@@ -423,13 +442,30 @@ const failedSignInPage = `<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sign-in failed</title>
-  <link rel="stylesheet" href="/style.css">
+  ` + pageStyle + `
 </head>
 <body>
   <header>
     <h1>Sign-in failed</h1>
   </header>
   <p>You could not be signed in.</p>
+  <p><a href="/login">Try again</a></p>
+</body>
+</html>`
+
+const unverifiedEmailPage = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Email not verified</title>
+  ` + pageStyle + `
+</head>
+<body>
+  <header>
+    <h1>Email not verified</h1>
+  </header>
+  <p>Your email address is not verified. Verify it with your identity provider, then try again.</p>
   <p><a href="/login">Try again</a></p>
 </body>
 </html>`
