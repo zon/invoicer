@@ -34,6 +34,7 @@ type Store interface {
 	List() ([]*invoice.Invoice, error)
 	GetByMonth(year int, month time.Month) (*invoice.Invoice, error)
 	SetProject(year int, month time.Month, project string) error
+	SetPaid(year int, month time.Month, paid bool) error
 }
 
 // Access signs users in and reports the current user.
@@ -81,6 +82,7 @@ func New(s Store, a ...Access) *Server {
 	server.GET("/", server.index)
 	server.GET("/:year/:month", server.show)
 	server.POST("/:year/:month", server.updateProject)
+	server.POST("/:year/:month/paid", server.updatePaid)
 	return server
 }
 
@@ -240,6 +242,42 @@ func (s *Server) updateProject(c *gin.Context) {
 	}
 
 	c.Redirect(http.StatusSeeOther, detailPath(year, month))
+}
+
+func (s *Server) updatePaid(c *gin.Context) {
+	year, month, ok := s.yearMonth(c)
+	if !ok {
+		return
+	}
+
+	paid, ok := parsePaid(c.PostForm("paid"))
+	if !ok {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
+	err := s.store.SetPaid(year, month, paid)
+	if errors.Is(err, store.ErrNotFound) {
+		s.notFound(c)
+		return
+	}
+	if err != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.Redirect(http.StatusSeeOther, detailPath(year, month))
+}
+
+func parsePaid(value string) (bool, bool) {
+	switch value {
+	case "true":
+		return true, true
+	case "false":
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 func (s *Server) yearMonth(c *gin.Context) (int, time.Month, bool) {

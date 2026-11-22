@@ -81,6 +81,19 @@ func (f *fakeStore) SetProject(year int, month time.Month, project string) error
 	return store.ErrNotFound
 }
 
+func (f *fakeStore) SetPaid(year int, month time.Month, paid bool) error {
+	if f.setErr != nil {
+		return f.setErr
+	}
+	for _, inv := range f.invoices {
+		if inv.Year == year && inv.Month == month {
+			inv.Paid = paid
+			return nil
+		}
+	}
+	return store.ErrNotFound
+}
+
 func TestNewDoesNotLogRoutesByDefault(t *testing.T) {
 	t.Setenv(gin.EnvGinMode, "")
 	gin.SetMode(gin.DebugMode)
@@ -730,6 +743,150 @@ func TestPaidStatusFormShowsWithoutAccessSettings(t *testing.T) {
 	form := paidForm(t, recorder.Body.String())
 	if !strings.Contains(form, "Mark paid") {
 		t.Error("form does not have a Mark paid button")
+	}
+}
+
+func TestPostPaidChangesStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		paid  bool
+		value string
+		want  bool
+	}{
+		{"mark paid", false, "true", true},
+		{"mark unpaid", true, "false", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stored := &invoice.Invoice{
+				Month:    time.October,
+				Year:     2027,
+				Customer: "Acme Corp",
+				Project:  "Website Redesign",
+				Rate:     100,
+				Paid:     tc.paid,
+				Weeks:    []invoice.Week{{Hours: 10}},
+			}
+			s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+			auth := signedInAs("admin", access.Admin)
+
+			recorder := postWithAccess(t, s, auth, "/2027/oct/paid", url.Values{"paid": {tc.value}})
+			if recorder.Code != http.StatusSeeOther {
+				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusSeeOther)
+			}
+			if location := recorder.Header().Get("Location"); location != "/2027/oct" {
+				t.Errorf("location: got %q, want %q", location, "/2027/oct")
+			}
+			if stored.Paid != tc.want {
+				t.Errorf("Paid: got %t, want %t", stored.Paid, tc.want)
+			}
+			if stored.Project != "Website Redesign" {
+				t.Errorf("Project: got %q, want %q", stored.Project, "Website Redesign")
+			}
+			if len(stored.Weeks) != 1 || stored.Weeks[0].Hours != 10 {
+				t.Errorf("weeks changed: %+v", stored.Weeks)
+			}
+
+			body := getWithAccess(t, s, auth, "/2027/oct").Body.String()
+			want := "Unpaid"
+			if tc.want {
+				want = "Paid"
+			}
+			if !strings.Contains(body, "<dd>"+want+"</dd>") {
+				t.Errorf("detail does not show %q", want)
+			}
+		})
+	}
+}
+
+func TestPostPaidReturnsNotFound(t *testing.T) {
+	for _, path := range []string{
+		"/2026/oct/paid",
+		"/2027/sep/paid",
+		"/2027/foo/paid",
+		"/2027/13/paid",
+		"/not-a-year/oct/paid",
+	} {
+		t.Run(path, func(t *testing.T) {
+			stored := &invoice.Invoice{
+				Month:    time.October,
+				Year:     2027,
+				Customer: "Acme Corp",
+				Rate:     100,
+			}
+			s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+
+			recorder := post(t, s, path, url.Values{"paid": {"true"}})
+			if recorder.Code != http.StatusNotFound {
+				t.Errorf("status: got %d, want %d", recorder.Code, http.StatusNotFound)
+			}
+			if stored.Paid {
+				t.Error("invoice is paid after a not-found response")
+			}
+		})
+	}
+}
+
+func TestPostPaidRejectsInvalidValue(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		form url.Values
+	}{
+		{"missing", url.Values{}},
+		{"empty", url.Values{"paid": {""}}},
+		{"other", url.Values{"paid": {"yes"}}},
+		{"number", url.Values{"paid": {"1"}}},
+		{"uppercase", url.Values{"paid": {"TRUE"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stored := &invoice.Invoice{
+				Month:    time.October,
+				Year:     2027,
+				Customer: "Acme Corp",
+				Rate:     100,
+			}
+			s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+
+			recorder := post(t, s, "/2027/oct/paid", tc.form)
+			if recorder.Code != http.StatusBadRequest {
+				t.Errorf("status: got %d, want %d", recorder.Code, http.StatusBadRequest)
+			}
+			if stored.Paid {
+				t.Error("invoice is paid after an invalid value")
+			}
+		})
+	}
+}
+
+func TestPostPaidReportsSaveFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		paid bool
+	}{
+		{"mark paid", false},
+		{"mark unpaid", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stored := &invoice.Invoice{
+				Month:    time.October,
+				Year:     2027,
+				Customer: "Acme Corp",
+				Rate:     100,
+				Paid:     tc.paid,
+			}
+			s := &fakeStore{
+				invoices: []*invoice.Invoice{stored},
+				setErr:   errors.New("database unavailable"),
+			}
+
+			recorder := post(t, s, "/2027/oct/paid", url.Values{"paid": {"true"}})
+
+			if recorder.Code != http.StatusInternalServerError {
+				t.Errorf("status: got %d, want %d", recorder.Code, http.StatusInternalServerError)
+			}
+			if stored.Paid != tc.paid {
+				t.Errorf("Paid: got %t, want %t", stored.Paid, tc.paid)
+			}
+		})
 	}
 }
 
