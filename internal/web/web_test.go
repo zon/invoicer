@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -110,6 +111,85 @@ func get(t *testing.T, s web.Store, path string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	web.New(s).ServeHTTP(recorder, req)
 	return recorder
+}
+
+func getWithAccess(t *testing.T, s web.Store, a web.Access, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	web.New(s, a).ServeHTTP(recorder, req)
+	return recorder
+}
+
+func TestRequestsWithoutSessionGoToLogin(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Rate:     100,
+	}
+
+	for _, path := range []string{"/", "/2027/oct"} {
+		t.Run(path, func(t *testing.T) {
+			recorder := getWithAccess(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, &fakeAccess{}, path)
+
+			if recorder.Code != http.StatusFound {
+				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusFound)
+			}
+
+			location, err := url.Parse(recorder.Header().Get("Location"))
+			if err != nil {
+				t.Fatalf("parsing redirect: %v", err)
+			}
+			if location.Path != "/login" {
+				t.Errorf("redirect path: got %q, want %q", location.Path, "/login")
+			}
+			if next := location.Query().Get("next"); next != path {
+				t.Errorf("return page: got %q, want %q", next, path)
+			}
+		})
+	}
+}
+
+func TestStylesheetLoadsWithoutSession(t *testing.T) {
+	recorder := getWithAccess(t, &fakeStore{}, &fakeAccess{}, "/style.css")
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
+	}
+	if contentType := recorder.Header().Get("Content-Type"); !strings.Contains(contentType, "text/css") {
+		t.Errorf("content type: got %q, want text/css", contentType)
+	}
+	if !strings.Contains(recorder.Body.String(), ".invoice-detail") {
+		t.Error("body does not contain the invoice detail style")
+	}
+}
+
+func TestSignedInUserReadsInvoices(t *testing.T) {
+	user := &access.User{
+		Email:   "jane@example.com",
+		Role:    access.Customer,
+		Expires: time.Now().Add(time.Hour),
+	}
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Rate:     100,
+	}
+
+	for _, path := range []string{"/", "/2027/oct"} {
+		t.Run(path, func(t *testing.T) {
+			recorder := getWithAccess(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, &fakeAccess{user: user}, path)
+
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
+			}
+			if !strings.Contains(recorder.Body.String(), "Acme Corp") {
+				t.Error("body does not show the invoice")
+			}
+		})
+	}
 }
 
 func TestListShowsEveryInvoiceNewestFirst(t *testing.T) {

@@ -686,9 +686,7 @@ func TestWebRunServesInvoicesFromResolvedDatabase(t *testing.T) {
 		return nil
 	}
 
-	secretPath, keyPath := writeAccessFiles(t)
-	stub := newDiscoveryStub(t)
-	configPath := writeTestConfig(t, "database: "+dbPath+"\n"+accessYAMLWithIssuer(stub.server.URL, secretPath, keyPath))
+	configPath := writeTestConfig(t, "database: "+dbPath+"\n")
 	cmd := &WebCmd{Address: "127.0.0.1:9000"}
 
 	if err := cmd.run(configPath, io.Discard); err != nil {
@@ -699,6 +697,40 @@ func TestWebRunServesInvoicesFromResolvedDatabase(t *testing.T) {
 	}
 	if !strings.Contains(gotBody, "Acme Corp") {
 		t.Error("served page does not list the stored invoice")
+	}
+}
+
+func TestWebRunRequiresSignInWithAccessSettings(t *testing.T) {
+	original := listenAndServe
+	defer func() { listenAndServe = original }()
+
+	var handler http.Handler
+	listenAndServe = func(server *http.Server) error {
+		handler = server.Handler
+		return nil
+	}
+
+	secretPath, keyPath := writeAccessFiles(t)
+	stub := newDiscoveryStub(t)
+	configPath := writeTestConfig(t, "database: "+filepath.Join(t.TempDir(), "invoices.db")+"\n"+accessYAMLWithIssuer(stub.server.URL, secretPath, keyPath))
+
+	if err := (&WebCmd{}).run(configPath, io.Discard); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	page := httptest.NewRecorder()
+	handler.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/", nil))
+	if page.Code != http.StatusFound {
+		t.Fatalf("page status: got %d, want %d", page.Code, http.StatusFound)
+	}
+	if location := page.Header().Get("Location"); location != "/login?next=%2F" {
+		t.Errorf("page location: got %q, want %q", location, "/login?next=%2F")
+	}
+
+	stylesheet := httptest.NewRecorder()
+	handler.ServeHTTP(stylesheet, httptest.NewRequest(http.MethodGet, "/style.css", nil))
+	if stylesheet.Code != http.StatusOK {
+		t.Errorf("stylesheet status: got %d, want %d", stylesheet.Code, http.StatusOK)
 	}
 }
 

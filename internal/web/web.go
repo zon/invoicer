@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -73,8 +74,8 @@ func New(s Store, a ...Access) *Server {
 		server.GET("/callback", auth.Callback)
 		server.GET("/logout", auth.Logout)
 	}
-	server.GET("/", server.index)
-	server.GET("/:year/:month", server.show)
+	server.GET("/", server.requireUser, server.index)
+	server.GET("/:year/:month", server.requireUser, server.show)
 	return server
 }
 
@@ -128,6 +129,22 @@ type weekRow struct {
 
 func (s *Server) stylesheet(c *gin.Context) {
 	c.Data(http.StatusOK, "text/css; charset=utf-8", styleCSS)
+}
+
+// requireUser sends a request without a session to sign-in and keeps the page
+// it asked for. Without access configured the app serves pages without sign-in.
+func (s *Server) requireUser(c *gin.Context) {
+	if s.access == nil {
+		c.Next()
+		return
+	}
+	if _, ok := s.access.CurrentUser(c); ok {
+		c.Next()
+		return
+	}
+	next := url.QueryEscape(c.Request.URL.RequestURI())
+	c.Redirect(http.StatusFound, "/login?next="+next)
+	c.Abort()
 }
 
 func (s *Server) index(c *gin.Context) {
