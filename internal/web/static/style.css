@@ -1,0 +1,73 @@
+:root {
+  color-scheme: light dark;
+  --border: #999;
+  --muted: #666;
+}
+
+body {
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+  margin: 0 auto;
+  max-width: 72rem;
+  padding: 1rem;
+}
+
+header h1 {
+  margin: 0 0 1rem;
+}
+
+.layout {
+  align-items: flex-start;
+  display: flex;
+  gap: 2rem;
+}
+
+.invoice-list {
+  flex: 1 1 55%;
+  overflow-x: auto;
+}
+
+#detail {
+  flex: 1 1 45%;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+}
+
+th {
+  font-weight: 600;
+}
+
+.weeks {
+  margin: 1rem 0;
+}
+
+.weeks caption {
+  font-weight: 600;
+  padding-bottom: 0.4rem;
+  text-align: left;
+}
+
+.total {
+  font-weight: 600;
+}
+
+@media (max-width: 40rem) {
+  .layout {
+    flex-direction: column;
+  }
+
+  .invoice-list,
+  #detail {
+    width: 100%;
+  }
+}

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -424,10 +425,10 @@ func TestWebRunServesInvoicesFromResolvedDatabase(t *testing.T) {
 
 	var gotAddress string
 	var gotBody string
-	listenAndServe = func(address string, handler http.Handler) error {
-		gotAddress = address
+	listenAndServe = func(server *http.Server) error {
+		gotAddress = server.Addr
 		recorder := httptest.NewRecorder()
-		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+		server.Handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
 		gotBody = recorder.Body.String()
 		return nil
 	}
@@ -443,5 +444,51 @@ func TestWebRunServesInvoicesFromResolvedDatabase(t *testing.T) {
 	}
 	if !strings.Contains(gotBody, "Acme Corp") {
 		t.Error("served page does not list the stored invoice")
+	}
+}
+
+func TestWebRunStopsOnInterrupt(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "invoices.db")
+	configPath := writeTestConfig(t, "database: "+dbPath+"\n")
+
+	originalListen := listenAndServe
+	defer func() { listenAndServe = originalListen }()
+	originalNotify := notifyContext
+	defer func() { notifyContext = originalNotify }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	notifyContext = func(context.Context, ...os.Signal) (context.Context, context.CancelFunc) {
+		return ctx, func() {}
+	}
+
+	started := make(chan struct{})
+	stopped := make(chan struct{})
+	listenAndServe = func(server *http.Server) error {
+		server.RegisterOnShutdown(func() { close(stopped) })
+		close(started)
+		<-stopped
+		return http.ErrServerClosed
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- (&WebCmd{Address: "127.0.0.1:9000"}).run(configPath)
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("server did not start")
+	}
+
+	cancel()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("server did not stop after the interrupt")
 	}
 }

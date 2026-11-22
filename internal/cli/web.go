@@ -1,8 +1,14 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/zon/invoicer/internal/store"
 	"github.com/zon/invoicer/internal/web"
@@ -30,7 +36,16 @@ func (c *WebCmd) Run() error {
 
 // listenAndServe starts the HTTP server. Tests replace it to inspect the
 // address and handler without binding a port.
-var listenAndServe = http.ListenAndServe
+var listenAndServe = func(server *http.Server) error {
+	return server.ListenAndServe()
+}
+
+// notifyContext returns a context cancelled by an interrupt. Tests replace it
+// to trigger the shutdown without sending a signal.
+var notifyContext = signal.NotifyContext
+
+// shutdownTimeout limits how long an interrupt waits for requests to finish.
+const shutdownTimeout = 10 * time.Second
 
 // run executes web with an explicit config path.
 func (c *WebCmd) run(configPath string) error {
@@ -45,7 +60,39 @@ func (c *WebCmd) run(configPath string) error {
 	}
 	defer s.Close()
 
-	return listenAndServe(opts.Address, web.New(s))
+	ctx, stop := notifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	return serve(ctx, &http.Server{Addr: opts.Address, Handler: web.New(s)})
+}
+
+// serve runs the server until ctx is cancelled, then shuts it down gracefully.
+func serve(ctx context.Context, server *http.Server) error {
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- listenAndServe(server)
+	}()
+
+	select {
+	case err := <-errCh:
+		return serverError(err)
+	case <-ctx.Done():
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("shutting down web server: %w", err)
+	}
+	return serverError(<-errCh)
+}
+
+func serverError(err error) error {
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }
 
 // resolveOptions merges config file values with CLI-provided values.

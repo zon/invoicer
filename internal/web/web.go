@@ -24,6 +24,9 @@ var templateFiles embed.FS
 //go:embed static/htmx.min.js
 var htmxJS []byte
 
+//go:embed static/style.css
+var styleCSS []byte
+
 // Store provides the invoices the web app reads.
 type Store interface {
 	List() ([]*invoice.Invoice, error)
@@ -44,6 +47,7 @@ func New(s Store) *Server {
 	}
 	server.SetHTMLTemplate(template.Must(template.ParseFS(templateFiles, "templates/*.html")))
 	server.GET("/htmx.min.js", server.htmx)
+	server.GET("/style.css", server.stylesheet)
 	server.GET("/", server.index)
 	server.GET("/:year/:month", server.show)
 	return server
@@ -96,6 +100,10 @@ type weekRow struct {
 
 func (s *Server) htmx(c *gin.Context) {
 	c.Data(http.StatusOK, "application/javascript; charset=utf-8", htmxJS)
+}
+
+func (s *Server) stylesheet(c *gin.Context) {
+	c.Data(http.StatusOK, "text/css; charset=utf-8", styleCSS)
 }
 
 func (s *Server) index(c *gin.Context) {

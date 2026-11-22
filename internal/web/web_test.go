@@ -334,6 +334,59 @@ func TestServesHtmx(t *testing.T) {
 	}
 }
 
+func TestServesStylesheet(t *testing.T) {
+	recorder := get(t, &fakeStore{}, "/style.css")
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
+	}
+	if contentType := recorder.Header().Get("Content-Type"); !strings.Contains(contentType, "text/css") {
+		t.Errorf("content type: got %q, want text/css", contentType)
+	}
+	if !strings.Contains(recorder.Body.String(), ".layout") {
+		t.Error("body does not contain the layout style")
+	}
+}
+
+func TestPagesLinkStylesheet(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Rate:     100,
+	}
+
+	for _, path := range []string{"/", "/2027/oct"} {
+		t.Run(path, func(t *testing.T) {
+			body := get(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, path).Body.String()
+
+			if !strings.Contains(body, `rel="stylesheet"`) {
+				t.Error("page does not link a stylesheet")
+			}
+			if !strings.Contains(body, `href="/style.css"`) {
+				t.Error("page does not link the served stylesheet")
+			}
+		})
+	}
+}
+
+func TestServesAssetsWithoutSupportFiles(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	for _, path := range []string{"/", "/style.css", "/htmx.min.js"} {
+		t.Run(path, func(t *testing.T) {
+			recorder := get(t, &fakeStore{}, path)
+
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
+			}
+			if recorder.Body.Len() == 0 {
+				t.Error("body is empty")
+			}
+		})
+	}
+}
+
 func TestDetailOmitsUnsetProject(t *testing.T) {
 	recorder := get(t, &fakeStore{invoices: []*invoice.Invoice{{
 		Month:    time.March,
