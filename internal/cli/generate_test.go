@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -156,6 +157,91 @@ func TestGenerateReusesIdentifierForSameInvoice(t *testing.T) {
 	}
 	if got.Rate != second.Rate {
 		t.Errorf("Rate: got %v, want %v", got.Rate, second.Rate)
+	}
+}
+
+func TestGenerateRefusesPaidInvoice(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "invoices.db")
+
+	original := &invoice.Invoice{
+		Month:    time.January,
+		Year:     2025,
+		Vendor:   "Jane Contractor",
+		Customer: "Acme Corp",
+		Project:  "Website Redesign",
+		Rate:     150,
+		Weeks:    invoice.WeeksForMonth(2025, time.January, 40),
+	}
+
+	s, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	id, _, err := s.Save(original)
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if err := s.SetPaid(2025, time.January, true); err != nil {
+		t.Fatalf("SetPaid: %v", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("closing store: %v", err)
+	}
+
+	cmd := &GenerateCmd{
+		Month:    "january",
+		Year:     2025,
+		Vendor:   "New Vendor",
+		Customer: "Globex",
+		Project:  "Mobile App",
+		Rate:     200,
+		Hours:    10,
+		Database: dbPath,
+	}
+
+	var out bytes.Buffer
+	err = cmd.run(filepath.Join(dir, "config.yaml"), &out)
+	if !errors.Is(err, store.ErrPaid) {
+		t.Fatalf("run error: got %v, want %v", err, store.ErrPaid)
+	}
+	if !strings.Contains(err.Error(), "paid") {
+		t.Errorf("run error does not report that the invoice is paid: %v", err)
+	}
+	if out.Len() != 0 {
+		t.Errorf("expected no output, got %q", out.String())
+	}
+
+	s, err = store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("reopen store: %v", err)
+	}
+	defer s.Close()
+
+	got, err := s.Get(id)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if !got.Paid {
+		t.Error("expected the invoice to stay paid")
+	}
+	if got.Vendor != original.Vendor {
+		t.Errorf("Vendor: got %q, want %q", got.Vendor, original.Vendor)
+	}
+	if got.Customer != original.Customer {
+		t.Errorf("Customer: got %q, want %q", got.Customer, original.Customer)
+	}
+	if got.Project != original.Project {
+		t.Errorf("Project: got %q, want %q", got.Project, original.Project)
+	}
+	if got.Rate != original.Rate {
+		t.Errorf("Rate: got %v, want %v", got.Rate, original.Rate)
+	}
+	if len(got.Weeks) != len(original.Weeks) {
+		t.Fatalf("Weeks: got %d, want %d", len(got.Weeks), len(original.Weeks))
+	}
+	if got.Total() != original.Total() {
+		t.Errorf("Total: got %v, want %v", got.Total(), original.Total())
 	}
 }
 

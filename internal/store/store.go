@@ -26,6 +26,7 @@ type Invoice struct {
 	Customer string
 	Project  string
 	Rate     float64
+	Paid     bool   `gorm:"not null;default:false"`
 	Weeks    []Week `gorm:"foreignKey:InvoiceID;constraint:OnDelete:CASCADE"`
 }
 
@@ -40,6 +41,9 @@ type Week struct {
 
 // ErrNotFound reports that the store holds no invoice matching a lookup.
 var ErrNotFound = errors.New("invoice not found")
+
+// ErrPaid reports that the store refused a write to a paid invoice.
+var ErrPaid = errors.New("invoice is paid")
 
 // Store reads and writes invoices in a SQLite database.
 type Store struct {
@@ -142,6 +146,9 @@ func (s *Store) Save(inv *invoice.Invoice) (string, bool, error) {
 
 		switch {
 		case err == nil:
+			if existing.Paid {
+				return fmt.Errorf("%w for %s %d", ErrPaid, inv.Month, inv.Year)
+			}
 			id = existing.ID
 			if err := updateInvoice(tx, id, inv); err != nil {
 				return err
@@ -282,14 +289,42 @@ func (s *Store) GetByMonth(year int, month time.Month) (*invoice.Invoice, error)
 
 // SetProject sets the project on the invoice for the given year and month. It
 // changes only the project and reports ErrNotFound when that month holds no
-// invoice.
+// invoice. It reports ErrPaid when the invoice is paid.
 func (s *Store) SetProject(year int, month time.Month, project string) error {
-	result := s.db.
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var existing Invoice
+		err := tx.
+			Where("year = ? AND month = ?", year, int(month)).
+			First(&existing).
+			Error
+
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			return fmt.Errorf("%w for %s %d", ErrNotFound, month, year)
+		case err != nil:
+			return fmt.Errorf("looking up invoice: %w", err)
+		case existing.Paid:
+			return fmt.Errorf("%w for %s %d", ErrPaid, month, year)
+		}
+
+		return updateColumn(tx, year, month, "project", project)
+	})
+}
+
+// SetPaid sets the paid status on the invoice for the given year and month. It
+// changes only the paid status and reports ErrNotFound when that month holds no
+// invoice.
+func (s *Store) SetPaid(year int, month time.Month, paid bool) error {
+	return updateColumn(s.db, year, month, "paid", paid)
+}
+
+func updateColumn(db *gorm.DB, year int, month time.Month, column string, value any) error {
+	result := db.
 		Model(&Invoice{}).
 		Where("year = ? AND month = ?", year, int(month)).
-		Update("project", project)
+		Update(column, value)
 	if result.Error != nil {
-		return fmt.Errorf("setting project for %s %d: %w", month, year, result.Error)
+		return fmt.Errorf("setting %s for %s %d: %w", column, month, year, result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return fmt.Errorf("%w for %s %d", ErrNotFound, month, year)
@@ -305,6 +340,7 @@ func toInvoice(record *Invoice) *invoice.Invoice {
 		Customer: record.Customer,
 		Project:  record.Project,
 		Rate:     record.Rate,
+		Paid:     record.Paid,
 		Weeks:    make([]invoice.Week, 0, len(record.Weeks)),
 	}
 	for _, w := range record.Weeks {

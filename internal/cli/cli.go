@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -195,6 +196,9 @@ func (c *GenerateCmd) run(configPath string, out io.Writer) error {
 	defer s.Close()
 
 	id, created, err := s.Save(inv)
+	if errors.Is(err, store.ErrPaid) {
+		return err
+	}
 	if err != nil {
 		return fmt.Errorf("saving invoice: %w", err)
 	}

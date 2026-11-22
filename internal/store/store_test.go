@@ -120,6 +120,42 @@ func TestSaveStoresInvoiceAndWeeks(t *testing.T) {
 	}
 }
 
+func TestSaveStoresNewInvoiceUnpaid(t *testing.T) {
+	s, _ := openTempStore(t)
+
+	id, _, err := s.Save(testInvoice())
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	got, err := s.Get(id)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Paid {
+		t.Error("expected a new invoice to be unpaid")
+	}
+
+	byMonth, err := s.GetByMonth(2025, time.January)
+	if err != nil {
+		t.Fatalf("GetByMonth: %v", err)
+	}
+	if byMonth.Paid {
+		t.Error("expected GetByMonth to report a new invoice unpaid")
+	}
+
+	invoices, err := s.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(invoices) != 1 {
+		t.Fatalf("Invoices: got %d, want 1", len(invoices))
+	}
+	if invoices[0].Paid {
+		t.Error("expected List to report a new invoice unpaid")
+	}
+}
+
 func TestSaveKeepsIdentifierAndReplacesStoredInvoice(t *testing.T) {
 	s, _ := openTempStore(t)
 

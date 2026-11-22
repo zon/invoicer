@@ -34,6 +34,7 @@ type Store interface {
 	List() ([]*invoice.Invoice, error)
 	GetByMonth(year int, month time.Month) (*invoice.Invoice, error)
 	SetProject(year int, month time.Month, project string) error
+	SetPaid(year int, month time.Month, paid bool) error
 }
 
 // Access signs users in and reports the current user.
@@ -81,6 +82,7 @@ func New(s Store, a ...Access) *Server {
 	server.GET("/", server.index)
 	server.GET("/:year/:month", server.show)
 	server.POST("/:year/:month", server.updateProject)
+	server.POST("/:year/:month/paid", server.updatePaid)
 	return server
 }
 
@@ -106,6 +108,7 @@ type indexData struct {
 
 type detailData struct {
 	User    *access.User
+	Admin   bool
 	Invoice *invoiceDetail
 }
 
@@ -114,6 +117,7 @@ type invoiceRow struct {
 	Month    string
 	Year     int
 	Project  string
+	Status   string
 	Total    string
 	Path     string
 }
@@ -127,6 +131,9 @@ type invoiceDetail struct {
 	Rate     string
 	Total    string
 	Path     string
+	PaidPath string
+	Status   string
+	Paid     bool
 	Weeks    []weekRow
 }
 
@@ -154,13 +161,22 @@ func (s *Server) requireUser(c *gin.Context) {
 	}
 	user, ok := s.access.CurrentUser(c)
 	if !ok {
-		next := url.QueryEscape(c.Request.URL.RequestURI())
+		next := url.QueryEscape(signInTarget(c))
 		c.Redirect(http.StatusFound, "/login?next="+next)
 		c.Abort()
 		return
 	}
 	c.Set(userContextKey, user)
 	c.Next()
+}
+
+// signInTarget returns the page to open after sign-in. A paid POST targets a
+// route that serves no page, so it returns to the invoice detail instead.
+func signInTarget(c *gin.Context) string {
+	if c.Request.Method == http.MethodPost && strings.HasSuffix(c.Request.URL.Path, "/paid") {
+		return strings.TrimSuffix(c.Request.URL.Path, "/paid")
+	}
+	return c.Request.URL.RequestURI()
 }
 
 func currentUser(c *gin.Context) *access.User {
@@ -170,6 +186,13 @@ func currentUser(c *gin.Context) *access.User {
 	}
 	user, _ := value.(*access.User)
 	return user
+}
+
+// isAdmin reports whether the current user may change invoices. Without access
+// configured every request is treated as an admin.
+func isAdmin(c *gin.Context) bool {
+	user := currentUser(c)
+	return user == nil || user.Role == access.Admin
 }
 
 func (s *Server) index(c *gin.Context) {
@@ -203,6 +226,7 @@ func (s *Server) show(c *gin.Context) {
 
 	c.HTML(http.StatusOK, "detail.html", detailData{
 		User:    currentUser(c),
+		Admin:   isAdmin(c),
 		Invoice: detail(inv),
 	})
 }
@@ -219,12 +243,57 @@ func (s *Server) updateProject(c *gin.Context) {
 		s.notFound(c)
 		return
 	}
+	if errors.Is(err, store.ErrPaid) {
+		c.Status(http.StatusConflict)
+		return
+	}
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
 	c.Redirect(http.StatusSeeOther, detailPath(year, month))
+}
+
+func (s *Server) updatePaid(c *gin.Context) {
+	if !isAdmin(c) {
+		c.Status(http.StatusForbidden)
+		return
+	}
+
+	year, month, ok := s.yearMonth(c)
+	if !ok {
+		return
+	}
+
+	paid, ok := parsePaid(c.PostForm("paid"))
+	if !ok {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
+	err := s.store.SetPaid(year, month, paid)
+	if errors.Is(err, store.ErrNotFound) {
+		s.notFound(c)
+		return
+	}
+	if err != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.Redirect(http.StatusSeeOther, detailPath(year, month))
+}
+
+func parsePaid(value string) (bool, bool) {
+	switch value {
+	case "true":
+		return true, true
+	case "false":
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 func (s *Server) yearMonth(c *gin.Context) (int, time.Month, bool) {
@@ -263,6 +332,7 @@ func rows(invoices []*invoice.Invoice) []invoiceRow {
 			Month:    inv.Month.String(),
 			Year:     inv.Year,
 			Project:  inv.Project,
+			Status:   paidStatus(inv.Paid),
 			Total:    fmt.Sprintf("$%.2f", inv.Total()),
 			Path:     detailPath(inv.Year, inv.Month),
 		})
@@ -283,8 +353,18 @@ func detail(inv *invoice.Invoice) *invoiceDetail {
 		Rate:     fmt.Sprintf("$%.2f", inv.Rate),
 		Total:    fmt.Sprintf("$%.2f", inv.Total()),
 		Path:     detailPath(inv.Year, inv.Month),
+		PaidPath: paidPath(inv.Year, inv.Month),
+		Status:   paidStatus(inv.Paid),
+		Paid:     inv.Paid,
 		Weeks:    weeks(inv.Weeks),
 	}
+}
+
+func paidStatus(paid bool) string {
+	if paid {
+		return "Paid"
+	}
+	return "Unpaid"
 }
 
 func weeks(items []invoice.Week) []weekRow {
@@ -300,4 +380,8 @@ func weeks(items []invoice.Week) []weekRow {
 
 func detailPath(year int, month time.Month) string {
 	return fmt.Sprintf("/%d/%s", year, strings.ToLower(month.String()[:3]))
+}
+
+func paidPath(year int, month time.Month) string {
+	return detailPath(year, month) + "/paid"
 }

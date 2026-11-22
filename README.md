@@ -123,11 +123,11 @@ $ invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 175 --hours 40
 Edited invoice for October 2026: 2f8c1a9b5d3e4f6a7c8b9d0e1f2a3b4c
 ```
 
-Changing the customer or project replaces the stored values and keeps the identifier.
+Changing the customer or project replaces the stored values and keeps the identifier. A paid invoice blocks generation until an admin user marks it unpaid in the web app.
 
 ## Web App
 
-`invoicer web` starts a web app for the stored invoices. It lists invoices at `/` and shows each invoice as a full page with a link back to the list. A signed-in user can change an invoice's project from its detail page.
+`invoicer web` starts a web app for the stored invoices. It lists invoices at `/` and shows each invoice as a full page with a link back to the list. A signed-in user can change an invoice's project from its detail page. An admin user can mark the invoice paid or unpaid from that page. A paid invoice blocks project edits.
 
 ```
 invoicer web [options]
