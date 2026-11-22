@@ -192,6 +192,135 @@ func TestSignedInUserReadsInvoices(t *testing.T) {
 	}
 }
 
+func TestAdminAndCustomerSeeEveryInvoice(t *testing.T) {
+	entries := []struct {
+		path    string
+		invoice *invoice.Invoice
+	}{
+		{
+			path: "/2027/oct",
+			invoice: &invoice.Invoice{
+				Month:    time.October,
+				Year:     2027,
+				Customer: "October Customer",
+				Project:  "October Project",
+				Rate:     100,
+				Weeks:    []invoice.Week{{Hours: 10}},
+			},
+		},
+		{
+			path: "/2028/jan",
+			invoice: &invoice.Invoice{
+				Month:    time.January,
+				Year:     2028,
+				Customer: "January Customer",
+				Project:  "January Project",
+				Rate:     100,
+				Weeks:    []invoice.Week{{Hours: 20}},
+			},
+		},
+		{
+			path: "/2028/dec",
+			invoice: &invoice.Invoice{
+				Month:    time.December,
+				Year:     2028,
+				Customer: "December Customer",
+				Project:  "December Project",
+				Rate:     100,
+				Weeks:    []invoice.Week{{Hours: 30}},
+			},
+		},
+	}
+
+	invoices := make([]*invoice.Invoice, 0, len(entries))
+	for _, entry := range entries {
+		invoices = append(invoices, entry.invoice)
+	}
+
+	for _, role := range []struct {
+		name string
+		role access.Role
+	}{
+		{"admin", access.Admin},
+		{"customer", access.Customer},
+	} {
+		t.Run(role.name, func(t *testing.T) {
+			user := &access.User{
+				Email:   role.name + "@example.com",
+				Role:    role.role,
+				Expires: time.Now().Add(time.Hour),
+			}
+
+			list := getWithAccess(t, &fakeStore{invoices: invoices}, &fakeAccess{user: user}, "/")
+			if list.Code != http.StatusOK {
+				t.Fatalf("list status: got %d, want %d", list.Code, http.StatusOK)
+			}
+			for _, entry := range entries {
+				if !strings.Contains(list.Body.String(), entry.invoice.Customer) {
+					t.Errorf("list does not show %q", entry.invoice.Customer)
+				}
+			}
+
+			for _, entry := range entries {
+				detail := getWithAccess(t, &fakeStore{invoices: invoices}, &fakeAccess{user: user}, entry.path)
+				if detail.Code != http.StatusOK {
+					t.Fatalf("%s status: got %d, want %d", entry.path, detail.Code, http.StatusOK)
+				}
+				body := detail.Body.String()
+				if !strings.Contains(body, entry.invoice.Customer) {
+					t.Errorf("%s does not show %q", entry.path, entry.invoice.Customer)
+				}
+				for _, other := range entries {
+					if other.path != entry.path && strings.Contains(body, other.invoice.Customer) {
+						t.Errorf("%s shows another invoice %q", entry.path, other.invoice.Customer)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestSignedInUnknownInvoiceReturnsNotFound(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Rate:     100,
+	}
+
+	for _, role := range []struct {
+		name string
+		role access.Role
+	}{
+		{"admin", access.Admin},
+		{"customer", access.Customer},
+	} {
+		t.Run(role.name, func(t *testing.T) {
+			user := &access.User{
+				Email:   role.name + "@example.com",
+				Role:    role.role,
+				Expires: time.Now().Add(time.Hour),
+			}
+
+			for _, path := range []string{
+				"/2026/oct",
+				"/2027/sep",
+				"/2027/foo",
+				"/2027/13",
+				"/not-a-year/oct",
+			} {
+				t.Run(path, func(t *testing.T) {
+					recorder := getWithAccess(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, &fakeAccess{user: user}, path)
+
+					if recorder.Code != http.StatusNotFound {
+						t.Errorf("status: got %d, want %d", recorder.Code, http.StatusNotFound)
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestSignedInPagesShowEmailAndSignOut(t *testing.T) {
 	user := &access.User{
 		Email:   "jane@example.com",
