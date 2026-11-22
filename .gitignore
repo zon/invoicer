@@ -2,3 +2,5 @@
 !internal/web/templates/*.html
 *.pdf
 invoices/
+tmp/
+build-errors.log

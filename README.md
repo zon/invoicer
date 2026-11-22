@@ -154,7 +154,15 @@ The database path comes from `--database`, then the config file, then the defaul
 
 ```bash
 just build   # Build the binary to bin/invoicer
+just dev     # Rebuild and restart the web app on changes
 just install # Build and install to $GOPATH/bin
 just test    # Run all tests
 just         # List available recipes
+```
+
+`just dev` runs the web app through [air](https://github.com/air-verse/air), installed with `go install github.com/air-verse/air@latest`. It uses the address and database `invoicer web` would use. Because the templates and stylesheet are embedded, air watches `html` and `css` files as well as Go files, so an edit to `internal/web/templates` reloads too. Extra arguments are passed to the app:
+
+```bash
+# Reload the web app on another port with a scratch database
+just dev -- --address 127.0.0.1:9000 --database ./tmp/scratch.db
 ```

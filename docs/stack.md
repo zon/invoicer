@@ -13,3 +13,4 @@ The web app renders HTML on the server with Go's `html/template` package. Gin se
 * [GORM](https://gorm.io/)
 * [SQLite](https://sqlite.org/)
 * [just](https://just.systems/man/en/)
+* [air](https://github.com/air-verse/air) (development only)
