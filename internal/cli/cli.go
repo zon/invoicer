@@ -3,10 +3,12 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/zon/invoicer/internal/config"
 	"github.com/zon/invoicer/internal/invoice"
+	"github.com/zon/invoicer/internal/store"
 )
 
 // DefaultModel is the opencode model used when neither the CLI nor config specifies one.
@@ -149,7 +151,12 @@ type ResolvedOptions struct {
 
 // Run executes the generate subcommand (invoice generation).
 func (c *GenerateCmd) Run() error {
-	opts, err := c.resolveOptions("")
+	return c.run("", os.Stdout)
+}
+
+// run executes generate with an explicit config path and output writer.
+func (c *GenerateCmd) run(configPath string, out io.Writer) error {
+	opts, err := c.resolveOptions(configPath)
 	if err != nil {
 		return err
 	}
@@ -174,8 +181,6 @@ func (c *GenerateCmd) Run() error {
 		return fmt.Errorf("resolving month/year: %w", err)
 	}
 
-	// Build invoice.
-	weeks := invoice.WeeksForMonth(year, month, opts.Hours)
 	inv := &invoice.Invoice{
 		Month:    month,
 		Year:     year,
@@ -183,37 +188,20 @@ func (c *GenerateCmd) Run() error {
 		Customer: opts.Customer,
 		Project:  opts.Project,
 		Rate:     opts.Rate,
-		Weeks:    weeks,
+		Weeks:    invoice.WeeksForMonth(year, month, opts.Hours),
 	}
 
-	// Determine output paths.
-	dir := invoice.InvoiceDir(inv)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("creating invoice directory: %w", err)
+	s, err := store.Open(opts.Database)
+	if err != nil {
+		return fmt.Errorf("opening invoice database: %w", err)
 	}
-	htmlPath := invoice.InvoiceFilePath(inv, dir)
+	defer s.Close()
 
-	// Generate HTML invoice via opencode.
-	fmt.Printf("Generating invoice for %s %d...\n", month.String(), year)
-	if err := invoice.GenerateHTML(inv, opts.Model, htmlPath); err != nil {
-		return fmt.Errorf("generating HTML invoice: %w", err)
-	}
-	fmt.Printf("HTML invoice written to: %s\n", htmlPath)
-
-	// Convert to PDF if requested.
-	if opts.PDF {
-		pdfPath := invoice.PDFFilePath(inv, dir)
-		fmt.Printf("Converting to PDF...\n")
-		if err := invoice.ConvertToPDF(htmlPath, pdfPath); err != nil {
-			return fmt.Errorf("converting to PDF: %w", err)
-		}
-		fmt.Printf("PDF invoice written to: %s\n", pdfPath)
-
-		if err := os.Remove(htmlPath); err != nil {
-			return fmt.Errorf("removing HTML invoice: %w", err)
-		}
-		fmt.Printf("Removed HTML invoice: %s\n", htmlPath)
+	id, err := s.Save(inv)
+	if err != nil {
+		return fmt.Errorf("saving invoice: %w", err)
 	}
 
+	fmt.Fprintln(out, id)
 	return nil
 }
