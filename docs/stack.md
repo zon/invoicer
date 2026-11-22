@@ -17,3 +17,8 @@ The web app also renders invoice PDFs in-process with gopdf. Rendering needs no 
 * [SQLite](https://sqlite.org/)
 * [just](https://just.systems/man/en/)
 * [air](https://github.com/air-verse/air) (development only)
+
+## Kubernetes Addons
+
+* [cert-manager](https://cert-manager.io/)
+* [Argo Workflows](https://argoproj.github.io/workflows/) (monthly schedule)
