@@ -285,12 +285,23 @@ func (s *Store) GetByMonth(year int, month time.Month) (*invoice.Invoice, error)
 // changes only the project and reports ErrNotFound when that month holds no
 // invoice.
 func (s *Store) SetProject(year int, month time.Month, project string) error {
+	return s.updateColumn(year, month, "project", project)
+}
+
+// SetPaid sets the paid status on the invoice for the given year and month. It
+// changes only the paid status and reports ErrNotFound when that month holds no
+// invoice.
+func (s *Store) SetPaid(year int, month time.Month, paid bool) error {
+	return s.updateColumn(year, month, "paid", paid)
+}
+
+func (s *Store) updateColumn(year int, month time.Month, column string, value any) error {
 	result := s.db.
 		Model(&Invoice{}).
 		Where("year = ? AND month = ?", year, int(month)).
-		Update("project", project)
+		Update(column, value)
 	if result.Error != nil {
-		return fmt.Errorf("setting project for %s %d: %w", month, year, result.Error)
+		return fmt.Errorf("setting %s for %s %d: %w", column, month, year, result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return fmt.Errorf("%w for %s %d", ErrNotFound, month, year)
