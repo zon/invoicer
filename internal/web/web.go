@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/zon/invoicer/internal/access"
 	"github.com/zon/invoicer/internal/invoice"
 	"github.com/zon/invoicer/internal/store"
 )
@@ -31,26 +32,47 @@ type Store interface {
 	GetByMonth(year int, month time.Month) (*invoice.Invoice, error)
 }
 
+// Access signs users in and reports the current user.
+type Access interface {
+	CurrentUser(*gin.Context) (*access.User, bool)
+	Login(*gin.Context)
+	Callback(*gin.Context)
+	Logout(*gin.Context)
+}
+
 // Server serves the invoice web app.
 type Server struct {
 	*gin.Engine
-	store Store
+	store  Store
+	access Access
 }
 
-// New returns a server that lists invoices from s.
-func New(s Store) *Server {
+// New returns a server that lists invoices from s. When a is provided, the
+// server also serves the sign-in, callback, and sign-out routes.
+func New(s Store, a ...Access) *Server {
 	// Gin defaults to debug mode, which logs every route on startup. Use
 	// release mode unless GIN_MODE asks for a different mode.
 	if os.Getenv(gin.EnvGinMode) == "" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	var auth Access
+	if len(a) > 0 {
+		auth = a[0]
+	}
+
 	server := &Server{
 		Engine: gin.New(),
 		store:  s,
+		access: auth,
 	}
 	server.SetHTMLTemplate(template.Must(template.ParseFS(templateFiles, "templates/*.html")))
 	server.GET("/style.css", server.stylesheet)
+	if auth != nil {
+		server.GET("/login", auth.Login)
+		server.GET("/callback", auth.Callback)
+		server.GET("/logout", auth.Logout)
+	}
 	server.GET("/", server.index)
 	server.GET("/:year/:month", server.show)
 	return server

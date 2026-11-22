@@ -12,10 +12,37 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/zon/invoicer/internal/access"
 	"github.com/zon/invoicer/internal/invoice"
 	"github.com/zon/invoicer/internal/store"
 	"github.com/zon/invoicer/internal/web"
 )
+
+type fakeAccess struct {
+	user     *access.User
+	login    bool
+	callback bool
+	logout   bool
+}
+
+func (f *fakeAccess) CurrentUser(*gin.Context) (*access.User, bool) {
+	return f.user, f.user != nil
+}
+
+func (f *fakeAccess) Login(c *gin.Context) {
+	f.login = true
+	c.Status(http.StatusNoContent)
+}
+
+func (f *fakeAccess) Callback(c *gin.Context) {
+	f.callback = true
+	c.Status(http.StatusNoContent)
+}
+
+func (f *fakeAccess) Logout(c *gin.Context) {
+	f.logout = true
+	c.Status(http.StatusNoContent)
+}
 
 type fakeStore struct {
 	invoices []*invoice.Invoice
@@ -51,6 +78,29 @@ func TestNewDoesNotLogRoutesByDefault(t *testing.T) {
 
 	if out.Len() > 0 {
 		t.Errorf("New wrote startup logs: %q", out.String())
+	}
+}
+
+func TestNewRegistersAccessRoutes(t *testing.T) {
+	auth := &fakeAccess{}
+	server := web.New(&fakeStore{}, auth)
+
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/login", nil))
+	if !auth.login {
+		t.Error("GET /login did not reach the access component")
+	}
+
+	recorder = httptest.NewRecorder()
+	server.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/callback", nil))
+	if !auth.callback {
+		t.Error("GET /callback did not reach the access component")
+	}
+
+	recorder = httptest.NewRecorder()
+	server.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/logout", nil))
+	if !auth.logout {
+		t.Error("GET /logout did not reach the access component")
 	}
 }
 
