@@ -6,14 +6,14 @@ The web app renders a stored invoice as a downloadable PDF from its stored data.
 ## Requirements
 
 ### Requirement: Invoice PDF
-The PDF SHALL show the same data as the invoice detail: vendor, customer, project when set, month and year, hourly rate, every weekly line item, paid status, and total. Each weekly line item SHALL show its date range and hours. The total SHALL follow [Invoice Amount](invoices.md#requirement-invoice-amount). A paid invoice SHALL carry a paid marker.
+The PDF SHALL show the same data as the invoice detail: vendor, customer, project when set, month and year, hourly rate, every weekly line item, and total. The PDF SHALL NOT show the paid status or a paid marker. Each weekly line item SHALL show its date range and hours. The total SHALL follow [Invoice Amount](invoices.md#requirement-invoice-amount).
 
 The PDF SHALL use A4 portrait pages and SHALL contain no form, no link, and no other invoice. A stored value SHALL render as text and never as markup. A long value SHALL wrap and SHALL stay inside the page.
 
 #### Scenario: PDF shows the stored invoice
 - GIVEN a stored invoice for October 2027 with a vendor, customer, project, rate, and weekly hours
 - WHEN its PDF is requested
-- THEN the PDF shows the vendor, customer, project, month, year, rate, each week's date range and hours, paid status, and total
+- THEN the PDF shows the vendor, customer, project, month, year, rate, each week's date range and hours, and total
 - AND the PDF shows no other invoice
 
 #### Scenario: Total follows stored data
@@ -21,10 +21,17 @@ The PDF SHALL use A4 portrait pages and SHALL contain no form, no link, and no o
 - WHEN its PDF is requested
 - THEN the total is the sum of each week's hours times the rate
 
-#### Scenario: Paid marker
+#### Scenario: Paid invoice
 - GIVEN a stored paid invoice
 - WHEN its PDF is requested
-- THEN the PDF shows the paid status and carries a paid marker
+- THEN the PDF shows no paid status
+- AND the PDF has no paid marker
+
+#### Scenario: Unpaid invoice
+- GIVEN a stored unpaid invoice
+- WHEN its PDF is requested
+- THEN the PDF shows no paid status
+- AND the PDF has no paid marker
 
 #### Scenario: Invoice without a project
 - GIVEN a stored invoice with no project

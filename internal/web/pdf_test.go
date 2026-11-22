@@ -73,7 +73,6 @@ func TestInvoicePDFShowsStoredInvoice(t *testing.T) {
 		"October",
 		"2027",
 		"$100.00",
-		"Status: Unpaid",
 		"Weekly line items",
 		"Oct 4-10",
 		"Oct 11-17",
@@ -125,7 +124,7 @@ func TestInvoicePDFOmitsUnsetProject(t *testing.T) {
 	}
 }
 
-func TestInvoicePDFShowsPaidMarker(t *testing.T) {
+func TestInvoicePDFOmitsPaidStatus(t *testing.T) {
 	t.Run("paid", func(t *testing.T) {
 		inv := testInvoice()
 		inv.Paid = true
@@ -135,11 +134,11 @@ func TestInvoicePDFShowsPaidMarker(t *testing.T) {
 			t.Fatalf("renderInvoicePDF: %v", err)
 		}
 		text, _ := readInvoicePDF(t, data)
-		if !hasPDFLine(text, "Status: Paid") {
-			t.Error("PDF does not show the paid status")
+		if strings.Contains(text, "Status") {
+			t.Error("PDF shows the paid status")
 		}
-		if !strings.Contains(text, "PAID") {
-			t.Error("PDF has no paid marker")
+		if strings.Contains(text, "PAID") {
+			t.Error("PDF has a paid marker")
 		}
 	})
 
@@ -149,8 +148,8 @@ func TestInvoicePDFShowsPaidMarker(t *testing.T) {
 			t.Fatalf("renderInvoicePDF: %v", err)
 		}
 		text, _ := readInvoicePDF(t, data)
-		if !hasPDFLine(text, "Status: Unpaid") {
-			t.Error("PDF does not show the unpaid status")
+		if strings.Contains(text, "Status") {
+			t.Error("PDF shows the unpaid status")
 		}
 		if strings.Contains(text, "PAID") {
 			t.Error("unpaid PDF has a paid marker")

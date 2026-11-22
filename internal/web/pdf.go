@@ -29,8 +29,6 @@ const (
 	pdfTitleHeight   = 32.0
 	pdfSectionSize   = 14.0
 	pdfSectionHeight = 20.0
-	pdfMarkerSize    = 24.0
-	pdfMarkerHeight  = 32.0
 	pdfRightColumn   = 90.0
 )
 
@@ -85,9 +83,6 @@ func newPDFWriter() (*pdfWriter, error) {
 }
 
 func (w *pdfWriter) invoice(inv *invoice.Invoice) {
-	if inv.Paid {
-		w.paidMarker()
-	}
 	w.write("Invoice", pdfTitleSize, pdfTitleHeight)
 	w.gap()
 	w.field("Vendor", inv.Vendor)
@@ -98,7 +93,6 @@ func (w *pdfWriter) invoice(inv *invoice.Invoice) {
 	w.field("Month", inv.Month.String())
 	w.field("Year", strconv.Itoa(inv.Year))
 	w.field("Hourly rate", fmt.Sprintf("$%.2f", inv.Rate))
-	w.field("Status", paidStatus(inv.Paid))
 	w.gap()
 	w.write("Weekly line items", pdfSectionSize, pdfSectionHeight)
 	w.columns("Week", "Hours")
@@ -111,25 +105,6 @@ func (w *pdfWriter) invoice(inv *invoice.Invoice) {
 
 func (w *pdfWriter) field(label, value string) {
 	w.write(label+": "+value, pdfFontSize, pdfLineHeight)
-}
-
-func (w *pdfWriter) paidMarker() {
-	if w.err != nil {
-		return
-	}
-	if err := w.pdf.SetFont(pdfFontFamily, "", pdfMarkerSize); err != nil {
-		w.err = fmt.Errorf("setting invoice PDF marker font: %w", err)
-		return
-	}
-	width, err := w.pdf.MeasureTextWidth("PAID")
-	if err != nil {
-		w.err = fmt.Errorf("measuring invoice PDF marker: %w", err)
-		return
-	}
-	w.pdf.SetXY(gopdf.PageSizeA4.W-pdfMargin-width, pdfMargin)
-	if err := w.pdf.Cell(&gopdf.Rect{W: width, H: pdfMarkerHeight}, "PAID"); err != nil {
-		w.err = fmt.Errorf("writing invoice PDF marker: %w", err)
-	}
 }
 
 func (w *pdfWriter) gap() {

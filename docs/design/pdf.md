@@ -4,9 +4,9 @@ Every stored invoice has a PDF form. The web app renders it on request from stor
 
 ## Invoice PDF
 
-The PDF is a printable form of one [invoice](invoices.md). It shows the same data as the invoice detail: vendor, customer, project when set, month and year, hourly rate, every weekly line item, paid status, and total. Each weekly line item shows its date range and hours. The total comes from stored data, as [Invoices](invoices.md) describes.
+The PDF is a printable form of one [invoice](invoices.md). It shows the same data as the invoice detail: vendor, customer, project when set, month and year, hourly rate, every weekly line item, and total. It shows neither the paid status nor a paid marker. Each weekly line item shows its date range and hours. The total comes from stored data, as [Invoices](invoices.md) describes.
 
-The PDF is one or more A4 portrait pages. It contains no form, no links, and no other invoice. A paid invoice carries a paid marker.
+The PDF is one or more A4 portrait pages. It contains no form, no links, and no other invoice.
 
 ## Download
 
