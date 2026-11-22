@@ -2,10 +2,6 @@
 
 High level objectives. Work through them in order. See [process](zpecs/process.md).
 
-## PDF downloads
-
-A user can download an invoice as a PDF. The PDF renders the invoice from its stored data. A user can download only invoices they can read.
-
 ## Container and chart
 
 One container image runs the CLI and the web app. A Helm chart deploys the web app with a persistent volume for the SQLite database and its OIDC configuration. The chart can also run the CLI against the same database.
