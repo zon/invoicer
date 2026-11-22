@@ -4,10 +4,13 @@ Invoicer has a CLI and a web app. Both use the same SQLite database. The CLI gen
 
 The web app renders HTML on the server with Go's `html/template` package. Gin serves HTTP. There is no client-side framework or JavaScript build step. The binary embeds the stylesheet.
 
+The web app also renders invoice PDFs in-process with gopdf. Rendering needs no browser and no external tool.
+
 ## Software
 
 * [Go](https://go.dev/)
 * [Gin](https://gin-gonic.com/)
+* [gopdf](https://github.com/signintech/gopdf)
 * [Kong](https://github.com/alecthomas/kong)
 * [yaml.v3](https://pkg.go.dev/gopkg.in/yaml.v3)
 * [GORM](https://gorm.io/)

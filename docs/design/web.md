@@ -1,6 +1,6 @@
 # Web Design
 
-The web app is a second front end over the invoice database. It lists stored invoices, renders a selected invoice, changes invoice projects, and lets an admin user mark an invoice paid. The project edit and the paid status are the only writes.
+The web app is a second front end over the invoice database. It lists stored invoices, renders a selected invoice, downloads it as a PDF, changes invoice projects, and lets an admin user mark an invoice paid. The project edit and the paid status are the only writes.
 
 ## Invoice List
 
@@ -14,21 +14,21 @@ Selecting an invoice opens its detail page.
 
 The invoice detail uses the year and month, like `/2027/oct`. The month uses its three-letter lowercase name. The detail shows the vendor, customer, project, month, year, hourly rate, weekly line items, paid status, and total. Each weekly line item shows its date range and hours. The project is editable while the invoice is unpaid, as [Project Edits](project-edits.md) describes. A paid invoice shows no project form. An admin user changes the paid status, as [Paid Status](paid-status.md) describes.
 
-The detail is a full page. It shows only that invoice and links back to the invoice list. A direct request to an invoice detail URL returns the complete page.
+The detail is a full page. It shows only that invoice and links back to the invoice list. It links to the invoice PDF, as [PDF](pdf.md) describes. A direct request to an invoice detail URL returns the complete page.
 
 The server returns 404 for an unknown year or month, or a month with no invoice.
 
 ## Rendering
 
-Gin serves HTTP. The server renders HTML with Go's `html/template` package. Pages and the stylesheet live in the binary, as [Stack](../stack.md) describes.
+Gin serves HTTP. The server renders HTML with Go's `html/template` package. Pages and the stylesheet live in the binary, as [Stack](../stack.md) describes. The app renders the invoice PDF from stored data, as [PDF](pdf.md) describes.
 
-Every response is a complete HTML page. The app has no JSON API.
+Every HTML response is a complete page. The app has no JSON API.
 
 Templates escape stored values. The app never renders an invoice field as raw HTML.
 
 ## Access
 
-Every page needs a valid session. The app signs users in, as [Access](access.md) describes. Every signed-in user reads every invoice. An admin user marks invoices paid, as [Paid Status](paid-status.md) describes. A paid invoice keeps its values and project until an admin marks it unpaid.
+Every page and PDF download needs a valid session. The app signs users in, as [Access](access.md) describes. Every signed-in user reads every invoice. An admin user marks invoices paid, as [Paid Status](paid-status.md) describes. A paid invoice keeps its values and project until an admin marks it unpaid.
 
 ## Data
 
@@ -40,7 +40,6 @@ The web app reads through the store. The store lists every invoice with its week
 
 ## Out of Scope
 
-* PDF downloads
 * Invoice email
 * Writes other than the project edit and the paid status
 * Containers and deployment

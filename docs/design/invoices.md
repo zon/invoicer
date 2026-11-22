@@ -14,7 +14,7 @@ An invoice records one customer's work for one calendar month:
 * weekly line items
 * paid status
 
-An invoice holds data only. Rendering is separate.
+An invoice holds data only. Rendering is separate. The [web app](web.md) renders the invoice as HTML and downloads it as a [PDF](pdf.md).
 
 The store assigns an opaque string identifier when it first saves an invoice. The identifier never changes.
 
@@ -43,6 +43,5 @@ Generate writes no files and generates no HTML. A failed save leaves the previou
 ## Out of Scope
 
 * Importing existing invoice files.
-* Rendering stored invoices. The [web app](web.md) renders them.
-* PDF downloads. A later milestone renders a PDF from stored data.
+* Rendering stored invoices as HTML. The [web app](web.md) renders them.
 * Customer records.
