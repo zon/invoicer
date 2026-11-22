@@ -127,6 +127,7 @@ type invoiceDetail struct {
 	Rate     string
 	Total    string
 	Path     string
+	Paid     bool
 	Weeks    []weekRow
 }
 
@@ -219,6 +220,10 @@ func (s *Server) updateProject(c *gin.Context) {
 		s.notFound(c)
 		return
 	}
+	if errors.Is(err, store.ErrPaid) {
+		c.Status(http.StatusConflict)
+		return
+	}
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
@@ -283,6 +288,7 @@ func detail(inv *invoice.Invoice) *invoiceDetail {
 		Rate:     fmt.Sprintf("$%.2f", inv.Rate),
 		Total:    fmt.Sprintf("$%.2f", inv.Total()),
 		Path:     detailPath(inv.Year, inv.Month),
+		Paid:     inv.Paid,
 		Weeks:    weeks(inv.Weeks),
 	}
 }

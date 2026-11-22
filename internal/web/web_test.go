@@ -71,6 +71,9 @@ func (f *fakeStore) SetProject(year int, month time.Month, project string) error
 	}
 	for _, inv := range f.invoices {
 		if inv.Year == year && inv.Month == month {
+			if inv.Paid {
+				return store.ErrPaid
+			}
 			inv.Project = project
 			return nil
 		}
@@ -612,6 +615,62 @@ func TestDetailShowsProjectForm(t *testing.T) {
 
 	if !strings.Contains(form, "Save") {
 		t.Error("form does not have a Save button")
+	}
+}
+
+func TestDetailHidesProjectFormWhenPaid(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Project:  "Website Redesign",
+		Rate:     100,
+		Paid:     true,
+	}
+
+	recorder := get(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, "/2027/oct")
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
+	}
+
+	body := recorder.Body.String()
+	if !strings.Contains(body, "Website Redesign") {
+		t.Error("detail does not show the project")
+	}
+	if strings.Contains(body, `name="project"`) {
+		t.Error("paid detail shows the project form")
+	}
+}
+
+func TestPostProjectOnPaidInvoiceReturnsConflict(t *testing.T) {
+	for _, role := range editRoles {
+		t.Run(role.name, func(t *testing.T) {
+			stored := &invoice.Invoice{
+				Month:    time.October,
+				Year:     2027,
+				Customer: "Acme Corp",
+				Project:  "Website Redesign",
+				Rate:     100,
+				Paid:     true,
+				Weeks:    []invoice.Week{{Hours: 10}},
+			}
+			s := &fakeStore{invoices: []*invoice.Invoice{stored}}
+			auth := signedInAs(role.name, role.role)
+
+			recorder := postWithAccess(t, s, auth, "/2027/oct", url.Values{"project": {"Mobile App"}})
+			if recorder.Code != http.StatusConflict {
+				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusConflict)
+			}
+			if stored.Project != "Website Redesign" {
+				t.Errorf("Project: got %q, want %q", stored.Project, "Website Redesign")
+			}
+			if !stored.Paid {
+				t.Error("invoice is no longer paid")
+			}
+			if len(stored.Weeks) != 1 || stored.Weeks[0].Hours != 10 {
+				t.Errorf("weeks changed: %+v", stored.Weeks)
+			}
+		})
 	}
 }
 
