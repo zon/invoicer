@@ -253,9 +253,15 @@ func (a *Access) Callback(c *gin.Context) {
 		return
 	}
 
+	code := c.Query("code")
+	if code == "" {
+		a.fail(c)
+		return
+	}
+
 	token, err := a.oauth.Exchange(
 		c.Request.Context(),
-		c.Query("code"),
+		code,
 		oauth2.VerifierOption(state.Verifier),
 	)
 	if err != nil {

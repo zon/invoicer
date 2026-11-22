@@ -174,6 +174,151 @@ func TestCallbackStartsSession(t *testing.T) {
 	}
 }
 
+func TestCallbackRedirectsToRequestedPage(t *testing.T) {
+	cases := []struct {
+		name     string
+		next     string
+		location string
+	}{
+		{name: "no requested page", next: "", location: "/"},
+		{name: "requested invoice", next: "/2027/oct", location: "/2027/oct"},
+		{name: "another site", next: "//example.com/invoices", location: "/"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stub := newProviderStub(t)
+			a := newTestAccess(t, stub)
+			router := testRouter(a)
+
+			authURL, signInCookie, _ := startSignIn(t, a, router, tc.next)
+			recorder := completeSignIn(t, stub, router, authURL, signInCookie, map[string]any{
+				"email":          "jane@example.com",
+				"email_verified": true,
+				"groups":         []string{"admins"},
+			})
+
+			if recorder.Code != http.StatusFound {
+				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusFound)
+			}
+			if location := recorder.Header().Get("Location"); location != tc.location {
+				t.Errorf("location: got %q, want %q", location, tc.location)
+			}
+		})
+	}
+}
+
+func TestCallbackStartsTwelveHourSession(t *testing.T) {
+	stub := newProviderStub(t)
+	a := newTestAccess(t, stub)
+	router := testRouter(a)
+
+	signedInAt := time.Date(2026, time.November, 22, 9, 0, 0, 0, time.UTC)
+	a.now = func() time.Time { return signedInAt }
+
+	authURL, signInCookie, _ := startSignIn(t, a, router, "/")
+	recorder := completeSignIn(t, stub, router, authURL, signInCookie, map[string]any{
+		"email":          "jane@example.com",
+		"email_verified": true,
+		"groups":         []string{"customers"},
+	})
+
+	cookie := findCookie(t, recorder, sessionCookieName)
+	if cookie.MaxAge != 12*60*60 {
+		t.Errorf("session max age: got %d, want %d", cookie.MaxAge, 12*60*60)
+	}
+
+	var user User
+	if err := a.session.Decode(sessionCookieName, cookieValue(t, cookie), &user); err != nil {
+		t.Fatalf("decoding session: %v", err)
+	}
+	if want := signedInAt.Add(12 * time.Hour); !user.Expires.Equal(want) {
+		t.Errorf("session expiry: got %s, want %s", user.Expires, want)
+	}
+}
+
+func TestCallbackRejectsMissingSignInState(t *testing.T) {
+	stub := newProviderStub(t)
+	a := newTestAccess(t, stub)
+	router := testRouter(a)
+
+	recorder := perform(router, "/callback?code=test&state=test")
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+	assertNoSessionCookie(t, recorder)
+}
+
+func TestCallbackRejectsMissingCode(t *testing.T) {
+	stub := newProviderStub(t)
+	a := newTestAccess(t, stub)
+	router := testRouter(a)
+
+	authURL, signInCookie, _ := startSignIn(t, a, router, "/")
+	recorder := performWithCookies(
+		router,
+		"/callback?state="+url.QueryEscape(authURL.Query().Get("state")),
+		signInCookie,
+	)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+	assertNoSessionCookie(t, recorder)
+}
+
+func TestCallbackRejectsTokenEndpointError(t *testing.T) {
+	stub := newProviderStub(t)
+	stub.mu.Lock()
+	stub.tokenStatus = http.StatusBadRequest
+	stub.mu.Unlock()
+	a := newTestAccess(t, stub)
+	router := testRouter(a)
+
+	authURL, signInCookie, _ := startSignIn(t, a, router, "/")
+	recorder := completeSignIn(t, stub, router, authURL, signInCookie, map[string]any{
+		"email":          "jane@example.com",
+		"email_verified": true,
+		"groups":         []string{"admins"},
+	})
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+	assertNoSessionCookie(t, recorder)
+}
+
+func TestCallbackRejectsTokenWithoutIDToken(t *testing.T) {
+	stub := newProviderStub(t)
+	stub.mu.Lock()
+	stub.tokenIDToken = false
+	stub.mu.Unlock()
+	a := newTestAccess(t, stub)
+	router := testRouter(a)
+
+	authURL, signInCookie, _ := startSignIn(t, a, router, "/")
+	recorder := completeSignIn(t, stub, router, authURL, signInCookie, map[string]any{
+		"email":          "jane@example.com",
+		"email_verified": true,
+		"groups":         []string{"admins"},
+	})
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+	assertNoSessionCookie(t, recorder)
+}
+
+func assertNoSessionCookie(t *testing.T, recorder *httptest.ResponseRecorder) {
+	t.Helper()
+	for _, cookie := range recorder.Result().Cookies() {
+		if cookie.Name == sessionCookieName && cookie.Value != "" && cookie.MaxAge >= 0 {
+			t.Errorf("failed sign-in set a session cookie: %+v", cookie)
+		}
+	}
+}
+
 func TestCallbackRejectsFailedSignIns(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -237,11 +382,7 @@ func TestCallbackRejectsFailedSignIns(t *testing.T) {
 			if !strings.HasPrefix(body, "<!doctype html>") || !strings.Contains(body, `href="/login"`) {
 				t.Errorf("failed sign-in is not a complete page linking to /login: %q", body)
 			}
-			for _, cookie := range recorder.Result().Cookies() {
-				if cookie.Name == sessionCookieName && cookie.Value != "" && cookie.MaxAge >= 0 {
-					t.Errorf("failed sign-in set a session cookie: %+v", cookie)
-				}
-			}
+			assertNoSessionCookie(t, recorder)
 		})
 	}
 }
@@ -545,9 +686,11 @@ type providerStub struct {
 	key      *rsa.PrivateKey
 	metadata map[string]any
 
-	mu     sync.Mutex
-	nonce  string
-	claims map[string]any
+	mu           sync.Mutex
+	nonce        string
+	claims       map[string]any
+	tokenStatus  int
+	tokenIDToken bool
 }
 
 func newProviderStub(t *testing.T) *providerStub {
@@ -557,7 +700,7 @@ func newProviderStub(t *testing.T) *providerStub {
 		t.Fatalf("generating provider key: %v", err)
 	}
 
-	stub := &providerStub{key: key}
+	stub := &providerStub{key: key, tokenIDToken: true}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/openid-configuration", stub.discovery)
 	mux.HandleFunc("/keys", stub.keys)
@@ -614,6 +757,8 @@ func (p *providerStub) token(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p.mu.Lock()
+	status := p.tokenStatus
+	includeIDToken := p.tokenIDToken
 	claims := map[string]any{
 		"iss":   p.server.URL,
 		"aud":   "client",
@@ -626,10 +771,17 @@ func (p *providerStub) token(w http.ResponseWriter, r *http.Request) {
 	}
 	p.mu.Unlock()
 
+	if status != 0 {
+		http.Error(w, "token endpoint failed", status)
+		return
+	}
+
 	response := map[string]any{
 		"access_token": "access",
 		"token_type":   "Bearer",
-		"id_token":     p.sign(claims),
+	}
+	if includeIDToken {
+		response["id_token"] = p.sign(claims)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
