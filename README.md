@@ -198,8 +198,10 @@ The image runs `invoicer` as its entrypoint and passes arguments through. `web` 
 Build the image with Podman from the repository root:
 
 ```bash
-podman build -t ghcr.io/zon/invoicer:0.1.0 -f deploy/container/Containerfile .
+podman build -t ghcr.io/zon/invoicer:0.1.0 --build-arg VERSION=0.1.0 -f deploy/container/Containerfile .
 ```
+
+The `VERSION` build argument stamps the app version into the binary. Without it the image reports `dev`.
 
 Push the image to a registry the cluster can reach:
 

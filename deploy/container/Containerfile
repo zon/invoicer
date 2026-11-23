@@ -10,7 +10,11 @@ RUN go mod download
 COPY cmd ./cmd
 COPY internal ./internal
 
-RUN CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/invoicer ./cmd/invoicer
+ARG VERSION=dev
+
+RUN CGO_ENABLED=1 GOOS=linux go build -trimpath \
+    -ldflags="-s -w -X github.com/zon/invoicer/internal/cli.Version=${VERSION}" \
+    -o /out/invoicer ./cmd/invoicer
 
 FROM alpine:3.24.4
 
