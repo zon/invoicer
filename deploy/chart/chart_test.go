@@ -1041,6 +1041,27 @@ func TestSchedulePodAffinity(t *testing.T) {
 	equalsMap(t, "affinity label selector", selector["matchLabels"], webLabels)
 }
 
+func TestSchedulePodRetriesTwice(t *testing.T) {
+	retry, _ := cronWorkflowTemplate(t, renderChart(t))["retryStrategy"].(map[string]any)
+	if len(retry) == 0 {
+		t.Fatal("schedule pod has no retry strategy")
+	}
+
+	equal(t, "retry limit", retry["limit"], 2)
+}
+
+func TestScheduleRemovesSuccessfulRunAfterOneDay(t *testing.T) {
+	ttl, _ := cronWorkflowWorkflowSpec(t, renderChart(t))["ttlStrategy"].(map[string]any)
+	if len(ttl) == 0 {
+		t.Fatal("schedule has no TTL strategy")
+	}
+
+	equal(t, "secondsAfterSuccess", ttl["secondsAfterSuccess"], 86400)
+	if value, ok := ttl["secondsAfterFailure"]; ok && value != nil {
+		t.Fatalf("failed run expires after %v", value)
+	}
+}
+
 func TestScheduleUsesDefaultCron(t *testing.T) {
 	spec := cronWorkflowSpec(t, renderChart(t))
 

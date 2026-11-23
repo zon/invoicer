@@ -12,6 +12,8 @@ spec:
   concurrencyPolicy: Forbid
   workflowSpec:
     entrypoint: generate
+    ttlStrategy:
+      secondsAfterSuccess: 86400
     {{- with .Values.image.pullSecrets }}
     imagePullSecrets:
       {{- range . }}
@@ -20,6 +22,8 @@ spec:
     {{- end }}
     templates:
       - name: generate
+        retryStrategy:
+          limit: 2
         securityContext:
           {{- include "invoicer.podSecurityContext" . | nindent 10 }}
         affinity:
