@@ -59,6 +59,61 @@ func TestOpenAddsUnpaidStatusToExistingInvoices(t *testing.T) {
 	}
 }
 
+func TestOpenAddsEmailFieldsToExistingInvoices(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "invoices.db")
+	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("open existing database: %v", err)
+	}
+
+	statements := []string{
+		`CREATE TABLE invoices (id text PRIMARY KEY, month integer, year integer, vendor text, customer text, project text, rate real, paid numeric NOT NULL DEFAULT false)`,
+		`INSERT INTO invoices (id, month, year, vendor, customer, project, rate, paid)
+			VALUES ('existing', 10, 2027, 'Vendor', 'Customer', 'Project', 100, false)`,
+	}
+	for _, statement := range statements {
+		if err := db.Exec(statement).Error; err != nil {
+			t.Fatalf("prepare existing database: %v", err)
+		}
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("get database connection: %v", err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		t.Fatalf("close existing database: %v", err)
+	}
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := s.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	})
+
+	got, err := s.Get("existing")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.ContactEmail != "" {
+		t.Errorf("ContactEmail: got %q, want empty", got.ContactEmail)
+	}
+	if !got.EmailSentAt.IsZero() {
+		t.Errorf("EmailSentAt: got %v, want no send time", got.EmailSentAt)
+	}
+	if got.Vendor != "Vendor" || got.Customer != "Customer" || got.Project != "Project" {
+		t.Errorf("stored invoice changed: got %q, %q, %q", got.Vendor, got.Customer, got.Project)
+	}
+	if got.Rate != 100 {
+		t.Errorf("Rate: got %v, want 100", got.Rate)
+	}
+}
+
 func TestOpenKeepsNewestInvoicePerMonthAndRemovesOthers(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "invoices.db")
 	s, err := Open(path)

@@ -20,15 +20,17 @@ import (
 
 // Invoice is the stored form of an invoice.
 type Invoice struct {
-	ID       string `gorm:"primaryKey"`
-	Month    int
-	Year     int
-	Vendor   string
-	Customer string
-	Project  string
-	Rate     float64
-	Paid     bool   `gorm:"not null;default:false"`
-	Weeks    []Week `gorm:"foreignKey:InvoiceID;constraint:OnDelete:CASCADE"`
+	ID           string `gorm:"primaryKey"`
+	Month        int
+	Year         int
+	Vendor       string
+	Customer     string
+	ContactEmail string `gorm:"not null;default:''"`
+	Project      string
+	Rate         float64
+	Paid         bool `gorm:"not null;default:false"`
+	EmailSentAt  *time.Time
+	Weeks        []Week `gorm:"foreignKey:InvoiceID;constraint:OnDelete:CASCADE"`
 }
 
 // Week is the stored form of a weekly line item.
@@ -178,13 +180,14 @@ func (s *Store) Save(inv *invoice.Invoice) (string, bool, error) {
 
 func createInvoice(tx *gorm.DB, id string, inv *invoice.Invoice) error {
 	record := &Invoice{
-		ID:       id,
-		Month:    int(inv.Month),
-		Year:     inv.Year,
-		Vendor:   inv.Vendor,
-		Customer: inv.Customer,
-		Project:  inv.Project,
-		Rate:     inv.Rate,
+		ID:           id,
+		Month:        int(inv.Month),
+		Year:         inv.Year,
+		Vendor:       inv.Vendor,
+		Customer:     inv.Customer,
+		ContactEmail: inv.ContactEmail,
+		Project:      inv.Project,
+		Rate:         inv.Rate,
 	}
 	if err := tx.Create(record).Error; err != nil {
 		return fmt.Errorf("saving invoice: %w", err)
@@ -194,12 +197,13 @@ func createInvoice(tx *gorm.DB, id string, inv *invoice.Invoice) error {
 
 func updateInvoice(tx *gorm.DB, id string, inv *invoice.Invoice) error {
 	updates := map[string]any{
-		"month":    int(inv.Month),
-		"year":     inv.Year,
-		"vendor":   inv.Vendor,
-		"customer": inv.Customer,
-		"project":  inv.Project,
-		"rate":     inv.Rate,
+		"month":         int(inv.Month),
+		"year":          inv.Year,
+		"vendor":        inv.Vendor,
+		"customer":      inv.Customer,
+		"contact_email": inv.ContactEmail,
+		"project":       inv.Project,
+		"rate":          inv.Rate,
 	}
 	if err := tx.Model(&Invoice{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 		return fmt.Errorf("updating invoice: %w", err)
@@ -357,6 +361,13 @@ func (s *Store) SetPaid(year int, month time.Month, paid bool) error {
 	return updateColumn(s.db, year, month, "paid", paid)
 }
 
+// SetEmailSent records when the invoice email was sent for the given year and
+// month. It changes only the send time and reports ErrNotFound when that month
+// holds no invoice.
+func (s *Store) SetEmailSent(year int, month time.Month, sentAt time.Time) error {
+	return updateColumn(s.db, year, month, "email_sent_at", sentAt)
+}
+
 func updateColumn(db *gorm.DB, year int, month time.Month, column string, value any) error {
 	result := db.
 		Model(&Invoice{}).
@@ -373,15 +384,19 @@ func updateColumn(db *gorm.DB, year int, month time.Month, column string, value 
 
 func toInvoice(record *Invoice) *invoice.Invoice {
 	inv := &invoice.Invoice{
-		ID:       record.ID,
-		Month:    time.Month(record.Month),
-		Year:     record.Year,
-		Vendor:   record.Vendor,
-		Customer: record.Customer,
-		Project:  record.Project,
-		Rate:     record.Rate,
-		Paid:     record.Paid,
-		Weeks:    make([]invoice.Week, 0, len(record.Weeks)),
+		ID:           record.ID,
+		Month:        time.Month(record.Month),
+		Year:         record.Year,
+		Vendor:       record.Vendor,
+		Customer:     record.Customer,
+		ContactEmail: record.ContactEmail,
+		Project:      record.Project,
+		Rate:         record.Rate,
+		Paid:         record.Paid,
+		Weeks:        make([]invoice.Week, 0, len(record.Weeks)),
+	}
+	if record.EmailSentAt != nil {
+		inv.EmailSentAt = *record.EmailSentAt
 	}
 	for _, w := range record.Weeks {
 		inv.Weeks = append(inv.Weeks, invoice.Week{
