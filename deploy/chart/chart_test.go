@@ -888,6 +888,44 @@ func TestScheduleRendersOneCronWorkflow(t *testing.T) {
 	}
 }
 
+func cronWorkflowTemplate(t *testing.T, manifests []map[string]any) map[string]any {
+	t.Helper()
+	workflowSpec, _ := cronWorkflowSpec(t, manifests)["workflowSpec"].(map[string]any)
+	entrypoint, _ := workflowSpec["entrypoint"].(string)
+	if entrypoint == "" {
+		t.Fatal("CronWorkflow has no entrypoint")
+	}
+
+	templates, _ := workflowSpec["templates"].([]any)
+	if len(templates) != 1 {
+		t.Fatalf("CronWorkflow has %d templates, want one", len(templates))
+	}
+	template, _ := templates[0].(map[string]any)
+	name, _ := template["name"].(string)
+	equal(t, "template name", name, entrypoint)
+	return template
+}
+
+func cronWorkflowContainer(t *testing.T, manifests []map[string]any) map[string]any {
+	t.Helper()
+	container, _ := cronWorkflowTemplate(t, manifests)["container"].(map[string]any)
+	return container
+}
+
+func TestSchedulePodRunsGenerate(t *testing.T) {
+	manifests := renderChart(t)
+	container := cronWorkflowContainer(t, manifests)
+
+	equal(t, "pod image", containerImage(t, container), containerImage(t, webContainer(t, manifests)))
+	equalsAny(t, "args", container["args"], []any{"generate"})
+}
+
+func TestSchedulePodUsesImageTagValue(t *testing.T) {
+	manifests := renderChart(t, "--set", "image.tag=v1.2.3")
+
+	equal(t, "pod image", containerImage(t, cronWorkflowContainer(t, manifests)), "ghcr.io/zon/invoicer:v1.2.3")
+}
+
 func TestScheduleUsesDefaultCron(t *testing.T) {
 	spec := cronWorkflowSpec(t, renderChart(t))
 
