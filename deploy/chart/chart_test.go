@@ -329,8 +329,13 @@ func webContainer(t *testing.T, manifests []map[string]any) map[string]any {
 }
 
 func TestConfigMountIsReadOnly(t *testing.T) {
-	const configPath = "/home/invoicer/.invoicer/config.yaml"
 	manifests := renderChart(t)
+	assertConfigMount(t, manifests, deploymentPodSpec(t, manifests), webContainer(t, manifests))
+}
+
+func assertConfigMount(t *testing.T, manifests []map[string]any, pod, container map[string]any) {
+	t.Helper()
+	const configPath = "/home/invoicer/.invoicer/config.yaml"
 	configMap := findKind(t, manifests, "ConfigMap")
 
 	configName, _ := configMap["metadata"].(map[string]any)["name"].(string)
@@ -338,8 +343,7 @@ func TestConfigMountIsReadOnly(t *testing.T) {
 		t.Fatal("config map has no name")
 	}
 
-	podSpec := deploymentPodSpec(t, manifests)
-	mounts, _ := webContainer(t, manifests)["volumeMounts"].([]any)
+	mounts, _ := container["volumeMounts"].([]any)
 
 	var volumeName string
 	for _, value := range mounts {
@@ -353,10 +357,10 @@ func TestConfigMountIsReadOnly(t *testing.T) {
 		volumeName, _ = mount["name"].(string)
 	}
 	if volumeName == "" {
-		t.Fatalf("deployment mounts no file at %s", configPath)
+		t.Fatalf("pod mounts no file at %s", configPath)
 	}
 
-	volumes := podSpec["volumes"].([]any)
+	volumes, _ := pod["volumes"].([]any)
 	for _, value := range volumes {
 		volume := value.(map[string]any)
 		if volume["name"] != volumeName {
@@ -371,7 +375,7 @@ func TestConfigMountIsReadOnly(t *testing.T) {
 		}
 		return
 	}
-	t.Fatalf("deployment has no volume named %s", volumeName)
+	t.Fatalf("pod has no volume named %s", volumeName)
 }
 
 type secretFile struct {
@@ -486,10 +490,9 @@ func pvcName(t *testing.T, manifests []map[string]any) string {
 	return name
 }
 
-func assertDataMount(t *testing.T, manifests []map[string]any, claimName string) {
+func assertDataMount(t *testing.T, pod, container map[string]any, claimName string) {
 	t.Helper()
-	podSpec := deploymentPodSpec(t, manifests)
-	mounts, _ := webContainer(t, manifests)["volumeMounts"].([]any)
+	mounts, _ := container["volumeMounts"].([]any)
 
 	var volumeName string
 	for _, value := range mounts {
@@ -503,10 +506,10 @@ func assertDataMount(t *testing.T, manifests []map[string]any, claimName string)
 		volumeName, _ = mount["name"].(string)
 	}
 	if volumeName == "" {
-		t.Fatal("deployment mounts no volume at /data")
+		t.Fatal("pod mounts no volume at /data")
 	}
 
-	volumes, _ := podSpec["volumes"].([]any)
+	volumes, _ := pod["volumes"].([]any)
 	for _, value := range volumes {
 		volume := value.(map[string]any)
 		if volume["name"] != volumeName {
@@ -518,7 +521,7 @@ func assertDataMount(t *testing.T, manifests []map[string]any, claimName string)
 		}
 		return
 	}
-	t.Fatalf("deployment has no volume named %s", volumeName)
+	t.Fatalf("pod has no volume named %s", volumeName)
 }
 
 func TestPersistentVolumeClaim(t *testing.T) {
@@ -535,7 +538,7 @@ func TestPersistentVolumeClaim(t *testing.T) {
 	requests, _ := spec["resources"].(map[string]any)["requests"].(map[string]any)
 	equal(t, "storage", requests["storage"], "1Gi")
 
-	assertDataMount(t, manifests, pvcName(t, manifests))
+	assertDataMount(t, deploymentPodSpec(t, manifests), webContainer(t, manifests), pvcName(t, manifests))
 }
 
 func TestPersistentVolumeClaimUsesValues(t *testing.T) {
@@ -550,7 +553,7 @@ func TestPersistentVolumeClaimUsesValues(t *testing.T) {
 	requests, _ := spec["resources"].(map[string]any)["requests"].(map[string]any)
 	equal(t, "storage", requests["storage"], "5Gi")
 
-	assertDataMount(t, manifests, pvcName(t, manifests))
+	assertDataMount(t, deploymentPodSpec(t, manifests), webContainer(t, manifests), pvcName(t, manifests))
 }
 
 func TestPersistentVolumeClaimReusesExistingClaim(t *testing.T) {
@@ -562,7 +565,7 @@ func TestPersistentVolumeClaimReusesExistingClaim(t *testing.T) {
 		}
 	}
 
-	assertDataMount(t, manifests, "shared-data")
+	assertDataMount(t, deploymentPodSpec(t, manifests), webContainer(t, manifests), "shared-data")
 }
 
 func TestDeploymentRecreateStrategy(t *testing.T) {
@@ -924,6 +927,21 @@ func TestSchedulePodUsesImageTagValue(t *testing.T) {
 	manifests := renderChart(t, "--set", "image.tag=v1.2.3")
 
 	equal(t, "pod image", containerImage(t, cronWorkflowContainer(t, manifests)), "ghcr.io/zon/invoicer:v1.2.3")
+}
+
+func TestSchedulePodMountsConfig(t *testing.T) {
+	manifests := renderChart(t)
+	assertConfigMount(t, manifests, cronWorkflowTemplate(t, manifests), cronWorkflowContainer(t, manifests))
+}
+
+func TestSchedulePodMountsData(t *testing.T) {
+	manifests := renderChart(t)
+	assertDataMount(t, cronWorkflowTemplate(t, manifests), cronWorkflowContainer(t, manifests), pvcName(t, manifests))
+}
+
+func TestSchedulePodMountsExistingDataClaim(t *testing.T) {
+	manifests := renderChart(t, "--set", "data.existingClaim=shared-data")
+	assertDataMount(t, cronWorkflowTemplate(t, manifests), cronWorkflowContainer(t, manifests), "shared-data")
 }
 
 func TestScheduleUsesDefaultCron(t *testing.T) {
