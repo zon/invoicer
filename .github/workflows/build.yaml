@@ -45,6 +45,9 @@ jobs:
         run: podman save --output /tmp/invoicer-image.tar "$IMAGE:ci"
       - name: Scan the image
         run: trivy image --input /tmp/invoicer-image.tar --severity HIGH,CRITICAL --exit-code 1
+      - name: Check the chart app version
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: sh scripts/check-chart-app-version.sh deploy/chart "$(sh scripts/version.sh)"
       - name: Log in to the container registry
         if: github.event_name == 'push'
         run: |

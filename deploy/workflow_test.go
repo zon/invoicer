@@ -377,6 +377,31 @@ func TestWorkflowLogsInForTagBuildPublish(t *testing.T) {
 	}
 }
 
+func TestWorkflowChecksTagBuildChartAppVersion(t *testing.T) {
+	steps := pipelineSteps(t, loadWorkflow(t))
+
+	check := stepIndexMatching(steps, checksChartAppVersion)
+	if check < 0 {
+		t.Fatalf("workflow does not check the chart app version:\n%s", renderSteps(steps))
+	}
+	step := steps[check]
+	if !strings.Contains(step.If, "refs/tags/") {
+		t.Fatalf("chart app version check does not run only on tag builds: %q", step.If)
+	}
+	if !strings.Contains(step.Run, filepath.Join("deploy", "chart")) {
+		t.Fatalf("chart app version check does not use deploy/chart:\n%s", step.Run)
+	}
+	if !strings.Contains(step.Run, "scripts/version.sh") {
+		t.Fatalf("chart app version check does not use the app version from git:\n%s", step.Run)
+	}
+
+	for index, other := range steps {
+		if isPublishing(other) && index < check {
+			t.Fatalf("workflow publishes at %d before it checks the chart app version at %d", index, check)
+		}
+	}
+}
+
 func TestWorkflowLabelsTheImage(t *testing.T) {
 	steps := pipelineSteps(t, loadWorkflow(t))
 
@@ -522,6 +547,10 @@ func lintsChart(step workflowStep) bool {
 
 func publishesChart(step workflowStep) bool {
 	return strings.Contains(step.Run, filepath.Join("scripts", "publish-chart.sh"))
+}
+
+func checksChartAppVersion(step workflowStep) bool {
+	return strings.Contains(step.Run, filepath.Join("scripts", "check-chart-app-version.sh"))
 }
 
 func isTagImagePublishStep(step workflowStep) bool {
