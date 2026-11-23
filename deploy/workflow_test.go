@@ -330,6 +330,53 @@ func TestWorkflowPublishesMainPushToRegistry(t *testing.T) {
 	}
 }
 
+func TestWorkflowTagBuildPublishesVersionTag(t *testing.T) {
+	steps := pipelineSteps(t, loadWorkflow(t))
+
+	publish := stepIndexMatching(steps, isTagImagePublishStep)
+	if publish < 0 {
+		t.Fatalf("workflow does not publish the release image:\n%s", renderSteps(steps))
+	}
+	step := steps[publish]
+	if !strings.Contains(step.If, "refs/tags/") {
+		t.Fatalf("release image publish does not run only on tag builds: %q", step.If)
+	}
+	if !referencesImage(step.Run) {
+		t.Fatalf("release image publish does not use the workflow IMAGE:\n%s", step.Run)
+	}
+	if !strings.Contains(step.Run, "scripts/version.sh") {
+		t.Fatalf("release image publish does not use the app version from git:\n%s", step.Run)
+	}
+	if !strings.Contains(step.Run, "GITHUB_SHA") {
+		t.Fatalf("release image publish does not use the commit:\n%s", step.Run)
+	}
+
+	build := stepIndexMatching(steps, buildsImage)
+	if build < 0 {
+		t.Fatal("workflow does not build the image")
+	}
+	if tag := builtImageTag(steps[build].Run); !strings.Contains(step.Run, tag) {
+		t.Fatalf("release image publish does not use the built image %s:\n%s", tag, step.Run)
+	}
+}
+
+func TestWorkflowLogsInForTagBuildPublish(t *testing.T) {
+	steps := pipelineSteps(t, loadWorkflow(t))
+
+	login := stepIndexMatching(steps, logsInToRegistry)
+	publish := stepIndexMatching(steps, isTagImagePublishStep)
+	if login < 0 || publish < 0 || login > publish {
+		t.Fatalf("workflow logs in to the registry at %d but publishes the release at %d", login, publish)
+	}
+	condition := steps[login].If
+	if !strings.Contains(condition, "github.event_name == 'push'") {
+		t.Fatalf("registry login does not run on tag pushes: %q", condition)
+	}
+	if strings.Contains(condition, "refs/heads/main") && !strings.Contains(condition, "refs/tags/") {
+		t.Fatalf("registry login is limited to main pushes: %q", condition)
+	}
+}
+
 func TestWorkflowLabelsTheImage(t *testing.T) {
 	steps := pipelineSteps(t, loadWorkflow(t))
 
@@ -477,6 +524,10 @@ func publishesChart(step workflowStep) bool {
 	return strings.Contains(step.Run, filepath.Join("scripts", "publish-chart.sh"))
 }
 
+func isTagImagePublishStep(step workflowStep) bool {
+	return strings.Contains(step.Run, filepath.Join("scripts", "publish-image.sh"))
+}
+
 func logsInToChartRegistry(step workflowStep) bool {
 	return strings.Contains(step.Run, "helm registry login") && strings.Contains(step.Run, "ghcr.io")
 }
@@ -603,6 +654,7 @@ func isPublishing(step workflowStep) bool {
 		"oras push",
 		"crane push",
 		"scripts/publish-chart.sh",
+		"scripts/publish-image.sh",
 	} {
 		if strings.Contains(text, command) {
 			return true

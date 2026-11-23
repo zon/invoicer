@@ -46,7 +46,7 @@ jobs:
       - name: Scan the image
         run: trivy image --input /tmp/invoicer-image.tar --severity HIGH,CRITICAL --exit-code 1
       - name: Log in to the container registry
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io --username "${{ github.actor }}" --password-stdin
       - name: Publish the image
@@ -54,6 +54,14 @@ jobs:
         run: |
           podman tag "$IMAGE:ci" "$IMAGE:sha-${GITHUB_SHA:0:7}"
           podman push "$IMAGE:sha-${GITHUB_SHA:0:7}"
+      - name: Publish the release image
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          sh scripts/publish-image.sh \
+            "$IMAGE" \
+            "$(sh scripts/version.sh)" \
+            "$GITHUB_SHA" \
+            "$IMAGE:ci"
       - name: Log in to the chart registry
         if: github.event_name == 'push'
         run: |
