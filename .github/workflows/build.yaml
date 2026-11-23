@@ -31,6 +31,7 @@ jobs:
         run: |
           podman build \
             --file deploy/container/Containerfile \
+            --build-arg "VERSION=$(sh scripts/version.sh)" \
             --label "org.opencontainers.image.version=$(sh scripts/version.sh)" \
             --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
             --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \

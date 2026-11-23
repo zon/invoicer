@@ -402,6 +402,30 @@ func TestWorkflowChecksTagBuildChartAppVersion(t *testing.T) {
 	}
 }
 
+func TestWorkflowStampsAppVersionIntoImage(t *testing.T) {
+	steps := pipelineSteps(t, loadWorkflow(t))
+
+	build := stepIndexMatching(steps, buildsImage)
+	if build < 0 {
+		t.Fatal("workflow does not build the image")
+	}
+	version := imageBuildArg(steps[build].Run, "VERSION")
+	if version == "" {
+		t.Fatalf("image build does not stamp the app version:\n%s", steps[build].Run)
+	}
+	if !strings.Contains(version, "scripts/version.sh") {
+		t.Fatalf("image build VERSION %q does not come from scripts/version.sh", version)
+	}
+
+	publish := stepIndexMatching(steps, isTagImagePublishStep)
+	if publish < 0 {
+		t.Fatalf("workflow does not publish the release image:\n%s", renderSteps(steps))
+	}
+	if !strings.Contains(steps[publish].Run, "scripts/version.sh") {
+		t.Fatalf("release image publish does not use the same git version:\n%s", steps[publish].Run)
+	}
+}
+
 func TestWorkflowLabelsTheImage(t *testing.T) {
 	steps := pipelineSteps(t, loadWorkflow(t))
 
@@ -601,6 +625,18 @@ func imageLabels(run string) map[string]string {
 		labels[key] = value
 	}
 	return labels
+}
+
+// imageBuildArg returns the value of a build argument a build command applies.
+func imageBuildArg(run, name string) string {
+	arg := regexp.MustCompile(`--build-arg\s+(?:"([^"]*)"|'([^']*)'|(\S+))`)
+	for _, match := range arg.FindAllStringSubmatch(run, -1) {
+		key, value, ok := strings.Cut(match[1]+match[2]+match[3], "=")
+		if ok && key == name {
+			return value
+		}
+	}
+	return ""
 }
 
 // savedArchive returns the archive path a save command writes.
