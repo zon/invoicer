@@ -484,7 +484,7 @@ func assertSecretFile(t *testing.T, podSpec, container map[string]any, secretNam
 		volumeName, _ = mount["name"].(string)
 	}
 	if volumeName == "" {
-		t.Fatalf("deployment mounts no secret at %s", file.mountPath)
+		t.Fatalf("pod mounts no secret at %s", file.mountPath)
 	}
 
 	volumes, _ := podSpec["volumes"].([]any)
@@ -506,7 +506,7 @@ func assertSecretFile(t *testing.T, podSpec, container map[string]any, secretNam
 		}
 		t.Fatalf("volume %s does not mount key %s at %s", volumeName, file.key, file.itemPath)
 	}
-	t.Fatalf("deployment has no volume named %s", volumeName)
+	t.Fatalf("pod has no volume named %s", volumeName)
 }
 
 func TestChartRendersNoSecretValues(t *testing.T) {
@@ -1005,6 +1005,64 @@ func TestSchedulePodMountsConfig(t *testing.T) {
 func TestSchedulePodMountsData(t *testing.T) {
 	manifests := renderChart(t)
 	assertDataMount(t, cronWorkflowTemplate(t, manifests), cronWorkflowContainer(t, manifests), pvcName(t, manifests))
+}
+
+func TestSchedulePodMountsResendSecret(t *testing.T) {
+	manifests := renderChart(t)
+	assertSecretFile(t, cronWorkflowTemplate(t, manifests), cronWorkflowContainer(t, manifests), "invoicer-resend", secretFile{
+		mountPath: "/run/secrets/resend-api-key",
+		itemPath:  "resend-api-key",
+		key:       "api-key",
+	})
+}
+
+func TestSchedulePodUsesResendSecretValues(t *testing.T) {
+	manifests := renderChart(t,
+		"--set", "resend.secretName=example-resend",
+		"--set", "resend.apiKeyKey=resend-key",
+	)
+	assertSecretFile(t, cronWorkflowTemplate(t, manifests), cronWorkflowContainer(t, manifests), "example-resend", secretFile{
+		mountPath: "/run/secrets/resend-api-key",
+		itemPath:  "resend-api-key",
+		key:       "resend-key",
+	})
+}
+
+func TestSchedulePodUsesDefaultResendKey(t *testing.T) {
+	manifests := renderChart(t, "--set", "resend.apiKeyKey=")
+	assertSecretFile(t, cronWorkflowTemplate(t, manifests), cronWorkflowContainer(t, manifests), "invoicer-resend", secretFile{
+		mountPath: "/run/secrets/resend-api-key",
+		itemPath:  "resend-api-key",
+		key:       "api-key",
+	})
+}
+
+func TestSchedulePodMountsNoResendSecretWithoutSender(t *testing.T) {
+	manifests := renderChart(t, "--set", "resend.from=")
+	assertNoSecretMount(t, cronWorkflowTemplate(t, manifests), cronWorkflowContainer(t, manifests), "/run/secrets/resend-api-key", "invoicer-resend")
+}
+
+func TestWebPodMountsNoResendSecret(t *testing.T) {
+	manifests := renderChart(t)
+	assertNoSecretMount(t, deploymentPodSpec(t, manifests), webContainer(t, manifests), "/run/secrets/resend-api-key", "invoicer-resend")
+}
+
+func assertNoSecretMount(t *testing.T, pod, container map[string]any, mountPath, secretName string) {
+	t.Helper()
+	mounts, _ := container["volumeMounts"].([]any)
+	for _, value := range mounts {
+		if mount := value.(map[string]any); mount["mountPath"] == mountPath {
+			t.Fatalf("pod mounts a secret at %s", mountPath)
+		}
+	}
+
+	volumes, _ := pod["volumes"].([]any)
+	for _, value := range volumes {
+		secret, _ := value.(map[string]any)["secret"].(map[string]any)
+		if secret["secretName"] == secretName {
+			t.Fatalf("pod reads secret %s", secretName)
+		}
+	}
 }
 
 func TestSchedulePodMountsExistingDataClaim(t *testing.T) {
