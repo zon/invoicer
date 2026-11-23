@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zon/invoicer/internal/config"
 	"github.com/zon/invoicer/internal/email"
 	"github.com/zon/invoicer/internal/invoice"
 	"github.com/zon/invoicer/internal/store"
@@ -64,12 +66,19 @@ func writeAPIKeyFile(t *testing.T) string {
 // emailConfig returns a config that turns on email sending.
 func emailConfig(t *testing.T) string {
 	t.Helper()
+	return emailConfigWithKeyFile(t, writeAPIKeyFile(t))
+}
+
+// emailConfigWithKeyFile returns a config that turns on email sending and names
+// the given API key file.
+func emailConfigWithKeyFile(t *testing.T, keyFile string) string {
+	t.Helper()
 	return fmt.Sprintf(`customerEmail: billing@acme.com
 baseUrl: https://invoices.example.com
 resend:
   apiKeyFile: %s
   from: invoicer@example.com
-`, writeAPIKeyFile(t))
+`, keyFile)
 }
 
 func TestGenerateSendsCreatedInvoice(t *testing.T) {
@@ -228,6 +237,174 @@ func TestGenerateSendsWhenEditingUnsentInvoice(t *testing.T) {
 	got := loadInvoice(t, dbPath, id)
 	if !got.EmailSentAt.Equal(sentAt) {
 		t.Errorf("EmailSentAt: got %v, want %v", got.EmailSentAt, sentAt)
+	}
+}
+
+func TestGenerateReportsFailedSendAndLeavesInvoiceUnsent(t *testing.T) {
+	cases := []struct {
+		name   string
+		config func(t *testing.T) string
+		sender *stubSender
+		want   string
+	}{
+		{
+			name:   "timeout",
+			config: emailConfig,
+			sender: &stubSender{err: context.DeadlineExceeded},
+			want:   "context deadline exceeded",
+		},
+		{
+			name:   "rejected message",
+			config: emailConfig,
+			sender: &stubSender{err: errors.New("sending invoice email: invalid from address")},
+			want:   "invalid from address",
+		},
+		{
+			name: "missing API key file",
+			config: func(t *testing.T) string {
+				return emailConfigWithKeyFile(t, filepath.Join(t.TempDir(), "missing"))
+			},
+			want: "reading resend.apiKeyFile",
+		},
+		{
+			name: "unreadable API key file",
+			config: func(t *testing.T) string {
+				return emailConfigWithKeyFile(t, t.TempDir())
+			},
+			want: "reading resend.apiKeyFile",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			dbPath := filepath.Join(dir, "invoices.db")
+			configPath := writeTestConfig(t, tc.config(t))
+
+			if tc.sender != nil {
+				useStubSender(t, tc.sender)
+			}
+
+			cmd := &GenerateCmd{
+				Month:    "january",
+				Year:     2025,
+				Vendor:   "Jane Contractor",
+				Customer: "Acme Corp",
+				Rate:     150,
+				Hours:    40,
+				Database: dbPath,
+			}
+
+			var out bytes.Buffer
+			err := cmd.run(configPath, &out)
+			if err == nil {
+				t.Fatal("run did not report the failed send")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error: got %q, want it to contain %q", err, tc.want)
+			}
+
+			id := outputID(t, out.String())
+			wantOut := "Created invoice for January 2025: " + id + "\n"
+			if out.String() != wantOut {
+				t.Errorf("output: got %q, want only the identifier %q", out.String(), wantOut)
+			}
+			if tc.sender != nil && len(tc.sender.messages) != 1 {
+				t.Errorf("messages: got %d, want one attempted send", len(tc.sender.messages))
+			}
+
+			got := loadInvoice(t, dbPath, id)
+			if !got.EmailSentAt.IsZero() {
+				t.Errorf("EmailSentAt: got %v, want no send time", got.EmailSentAt)
+			}
+
+			sentAt := time.Date(2026, time.November, 23, 9, 30, 0, 0, time.UTC)
+			fixNow(t, sentAt)
+
+			sender := &stubSender{emailID: "email_123"}
+			useStubSender(t, sender)
+
+			second := *cmd
+			second.Rate = 200
+			var secondOut bytes.Buffer
+			if err := second.run(writeTestConfig(t, emailConfig(t)), &secondOut); err != nil {
+				t.Fatalf("second run: %v", err)
+			}
+
+			wantSecond := "Edited invoice for January 2025: " + id + "\n" +
+				"Sent invoice email to billing@acme.com: email_123\n"
+			if secondOut.String() != wantSecond {
+				t.Errorf("second output: got %q, want %q", secondOut.String(), wantSecond)
+			}
+			if len(sender.messages) != 1 {
+				t.Errorf("second messages: got %d, want one send", len(sender.messages))
+			}
+
+			got = loadInvoice(t, dbPath, id)
+			if !got.EmailSentAt.Equal(sentAt) {
+				t.Errorf("EmailSentAt: got %v, want the second send time %v", got.EmailSentAt, sentAt)
+			}
+		})
+	}
+}
+
+func TestSendInvoiceReportsFailureToRecordSendTime(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "invoices.db")
+
+	s, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	id, _, err := s.Save(&invoice.Invoice{
+		Month:        time.January,
+		Year:         2025,
+		Vendor:       "Jane Contractor",
+		Customer:     "Acme Corp",
+		ContactEmail: "billing@acme.com",
+		Rate:         150,
+		Weeks:        invoice.WeeksForMonth(2025, time.January, 40),
+	})
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	stored, err := s.Get(id)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("closing store: %v", err)
+	}
+
+	sender := &stubSender{emailID: "email_123"}
+	useStubSender(t, sender)
+
+	opts := &ResolvedOptions{
+		BaseURL: "https://invoices.example.com",
+		Resend: &config.Resend{
+			APIKeyFile: writeAPIKeyFile(t),
+			From:       "invoicer@example.com",
+		},
+	}
+
+	var out bytes.Buffer
+	err = sendInvoice(&out, s, stored, opts)
+	if err == nil {
+		t.Fatal("sendInvoice did not report the failed send time")
+	}
+	if !strings.Contains(err.Error(), "recording email send time") {
+		t.Errorf("error: got %q, want the send time failure", err)
+	}
+	if len(sender.messages) != 1 {
+		t.Errorf("messages: got %d, want the accepted send", len(sender.messages))
+	}
+	if out.Len() != 0 {
+		t.Errorf("output: got %q, want nothing before the send time is recorded", out.String())
+	}
+
+	got := loadInvoice(t, dbPath, strings.ToLower(id))
+	if !got.EmailSentAt.IsZero() {
+		t.Errorf("EmailSentAt: got %v, want no send time", got.EmailSentAt)
 	}
 }
 
