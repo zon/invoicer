@@ -10,6 +10,8 @@ The system SHALL save every generated invoice and its weekly line items in the i
 
 A stored invoice SHALL record a paid status. A new invoice SHALL start unpaid.
 
+A stored invoice SHALL record the customer's contact email and, after a successful send, the email send time, as [Email](email.md) describes.
+
 Saving an invoice and its weeks SHALL be one transaction. A failed save SHALL leave any previously stored invoice unchanged.
 
 #### Scenario: New invoice is stored
@@ -27,7 +29,7 @@ Saving an invoice and its weeks SHALL be one transaction. A failed save SHALL le
 ### Requirement: Invoice Identity
 The store SHALL assign an opaque string identifier to an invoice when it first saves the invoice. The store SHALL keep the identifier in lowercase, and every display of the identifier SHALL use uppercase. The identifier SHALL never change.
 
-A year and month SHALL identify an invoice. The database SHALL hold at most one invoice per year and month. Saving an invoice for an existing year and month SHALL replace the stored values and weekly line items, and SHALL keep the identifier. The new customer and project SHALL replace the stored customer and project. A paid invoice SHALL NOT be replaced. A save for a paid month SHALL fail and leave the stored invoice unchanged.
+A year and month SHALL identify an invoice. The database SHALL hold at most one invoice per year and month. Saving an invoice for an existing year and month SHALL replace the stored values and weekly line items, and SHALL keep the identifier. The new customer, contact email, and project SHALL replace the stored customer, contact email, and project. The send time SHALL stay the same. A paid invoice SHALL NOT be replaced. A save for a paid month SHALL fail and leave the stored invoice unchanged.
 
 #### Scenario: First save assigns an identifier
 - GIVEN no invoice exists for the year and month
@@ -102,17 +104,24 @@ An invoice total SHALL be the sum of each week's hours multiplied by the invoice
 ### Requirement: Generate Output
 Generating an invoice SHALL save it and print whether the invoice was created or edited, the invoice's month and year, and its identifier. Generate SHALL NOT print file paths or report HTML or PDF output.
 
+After a successful send, generate SHALL print the recipient and the Resend email identifier. Generate SHALL send the invoice email as [Email](email.md#requirement-send-once) describes.
+
 Generate SHALL default to the previous calendar month in UTC.
 
 A given month without a year SHALL use the current UTC year. Omitting the month SHALL use the year of the previous calendar month, so January defaults to December of the prior year.
 
-When the stored invoice for the month is paid, generate SHALL report that the invoice is paid, store nothing, and exit non-zero.
+When the stored invoice for the month is paid, generate SHALL report that the invoice is paid, store nothing, send no email, and exit non-zero.
 
 #### Scenario: Successful generation
 - GIVEN valid vendor, customer, rate, and hours
 - WHEN a new invoice is generated
 - THEN the system stores the invoice
 - AND the output reports that it was created, with the month, year, and identifier
+
+#### Scenario: Successful send is reported
+- GIVEN email sending is configured
+- WHEN a new invoice is generated and sent
+- THEN the output names the recipient and the email identifier
 
 #### Scenario: Default month
 - GIVEN no month or year
@@ -134,6 +143,7 @@ When the stored invoice for the month is paid, generate SHALL report that the in
 - WHEN generate creates the same year and month
 - THEN generate reports that the invoice is paid
 - AND generate stores no change
+- AND generate sends no email
 - AND the command exits non-zero
 
 #### Scenario: Existing invoice is regenerated

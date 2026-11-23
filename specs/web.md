@@ -30,6 +30,8 @@ The detail address SHALL use the year and three-letter lowercase month name, lik
 
 The detail SHALL be a full page. It SHALL show only the invoice and SHALL link back to the invoice list. It SHALL link to the invoice PDF at the detail address plus `/pdf`, as [PDF](pdf.md) describes.
 
+The invoice email SHALL link to this page, as [Email](email.md#requirement-message) describes.
+
 #### Scenario: Direct detail request
 - GIVEN a stored invoice for October 2027
 - WHEN `/2027/oct` is requested
@@ -43,6 +45,11 @@ The detail SHALL be a full page. It SHALL show only the invoice and SHALL link b
 - GIVEN the detail page for October 2027 is open
 - WHEN the user follows the link back to the list
 - THEN the invoice list opens
+
+#### Scenario: Email link opens the detail
+- GIVEN an invoice email link for October 2027
+- WHEN a signed-in user opens the link
+- THEN the detail page for October 2027 loads
 
 #### Scenario: Detail for an invoice without a project
 - GIVEN a stored invoice with no project

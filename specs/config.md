@@ -1,18 +1,18 @@
 # Config Specification
 
 ## Purpose
-The YAML config file at `~/.invoicer/config.yaml` stores user defaults for invoice generation. The web app also reads its access settings from the same file, as [Access](access.md) describes.
+The YAML config file at `~/.invoicer/config.yaml` stores user defaults for invoice generation and email sending. The web app also reads its access settings from the same file, as [Access](access.md) describes.
 
 ## Requirements
 
 ### Requirement: Configuration Values
-The config SHALL hold `vendor`, `customer`, `project`, `rate`, `hours`, and `database`.
+The config SHALL hold `vendor`, `customer`, `customerEmail`, `project`, `rate`, `hours`, and `database`.
 
-`database` SHALL default to `~/.invoicer/invoices.db`. The other values SHALL have no default. Generate SHALL require `vendor`, `customer`, `rate`, and `hours` from a flag or config. `project` MAY be empty.
+`database` SHALL default to `~/.invoicer/invoices.db`. The other values SHALL have no default. Generate SHALL require `vendor`, `customer`, `rate`, and `hours` from a flag or config. `project` MAY be empty. `customerEmail` SHALL be optional unless email sending is configured, as [Email Configuration](#requirement-email-configuration) describes.
 
 The system SHALL ignore `pdf` and `model` keys in a config file.
 
-The web app SHALL also read `baseUrl` and the `oidc` settings from the same file, as [Access](access.md#requirement-access-configuration) describes. The other commands SHALL ignore those settings.
+The web app SHALL also read `baseUrl` and the `oidc` settings from the same file, as [Access](access.md#requirement-access-configuration) describes. Generate SHALL read `baseUrl` for the invoice email, as [Email](email.md#requirement-message) describes. The other commands SHALL ignore those settings.
 
 #### Scenario: Config supplies required values
 - GIVEN a config with vendor, customer, rate, and hours
@@ -29,10 +29,57 @@ The web app SHALL also read `baseUrl` and the `oidc` settings from the same file
 - WHEN generate runs
 - THEN neither value affects the invoice
 
-#### Scenario: CLI ignores access settings
-- GIVEN a config with `baseUrl` and `oidc` settings
+#### Scenario: CLI ignores OIDC settings
+- GIVEN a config with `baseUrl`, `oidc` settings, and no `resend` settings
 - WHEN generate runs
-- THEN the access settings do not affect the invoice
+- THEN the OIDC settings do not affect the invoice
+- AND generate sends no email
+
+### Requirement: Email Configuration
+`customerEmail` SHALL hold the customer's contact email. Generate SHALL store it on the invoice, as [Email](email.md#requirement-contact-address) describes.
+
+Email sending SHALL be optional, as [Email](email.md#requirement-optional-sending) describes. A config with any `resend` setting SHALL require `customerEmail`, `baseUrl`, `resend.apiKeyFile`, and `resend.from`. Generate SHALL fail before it saves when one is missing.
+
+`resend.apiKeyFile` SHALL name a readable file with the Resend API key. `resend.from` SHALL be a sender address on a verified Resend domain. `baseUrl` SHALL be the web app's public address, as [Access](access.md#requirement-access-configuration) describes.
+
+```yaml
+customerEmail: billing@acme.com
+baseUrl: https://invoices.example.com
+resend:
+  apiKeyFile: /run/secrets/resend-api-key
+  from: invoicer@example.com
+```
+
+`set config` SHALL write `customerEmail` and SHALL NOT write the `resend` block.
+
+#### Scenario: Complete email settings
+- GIVEN a config with `customerEmail`, `baseUrl`, and both `resend` values
+- WHEN generate runs
+- THEN it stores the invoice with the contact email
+- AND it sends the email
+
+#### Scenario: Missing sender
+- GIVEN a config with `customerEmail`, `baseUrl`, `resend.apiKeyFile`, and no `resend.from`
+- WHEN generate runs
+- THEN an error reports the missing value
+- AND generate stores no invoice
+
+#### Scenario: Missing contact email
+- GIVEN a config with `resend` settings and no `customerEmail`
+- WHEN generate runs
+- THEN an error reports the missing value
+- AND generate stores no invoice
+
+#### Scenario: Set config writes the contact email
+- GIVEN no config file
+- WHEN `set config --customer-email billing@acme.com` runs
+- THEN the config holds that `customerEmail`
+- AND the config holds no `resend` block
+
+#### Scenario: Set config keeps Resend settings
+- GIVEN a config with `resend` settings
+- WHEN `set config --rate 200` runs
+- THEN the `resend` settings stay the same
 
 ### Requirement: Value Order
 Generate SHALL resolve values in this order, highest first: command-line flags, config values, built-in defaults. A flag SHALL win over the matching config value.
@@ -82,7 +129,7 @@ The CLI SHALL create the database file and its parent directory when they do not
 - THEN the CLI creates the directory and database file
 
 ### Requirement: Write Configuration
-`invoicer set config` SHALL write provided values to the config file. It SHALL accept `vendor`, `customer`, `project`, `rate`, `hours`, and `database`. It SHALL update only the values provided, leaving others unchanged, and SHALL create `~/.invoicer` and the config file when missing.
+`invoicer set config` SHALL write provided values to the config file. It SHALL accept `vendor`, `customer`, `customerEmail`, `project`, `rate`, `hours`, and `database`. It SHALL update only the values provided, leaving others unchanged, and SHALL create `~/.invoicer` and the config file when missing.
 
 `set config` SHALL NOT clear a value. Removing a value SHALL require editing the file.
 

@@ -20,7 +20,9 @@ The chart SHALL live at `deploy/chart` and SHALL deploy the [container image](co
 - AND the chart does not create the namespace
 
 ### Requirement: Values
-The chart SHALL accept `image`, `hostname`, `publicURL`, `config`, `access`, `data`, `schedule`, `service`, `ingress`, `certificate`, and `resources`. An empty `image.tag` SHALL use the chart app version. The chart SHALL attach every `image.pullSecrets` entry to each pod. The chart version and app version SHALL follow [Release](release.md).
+The chart SHALL accept `image`, `hostname`, `publicURL`, `config`, `resend`, `access`, `data`, `schedule`, `service`, `ingress`, `certificate`, and `resources`. An empty `image.tag` SHALL use the chart app version. The chart SHALL attach every `image.pullSecrets` entry to each pod. The chart version and app version SHALL follow [Release](release.md).
+
+`resend.from` SHALL set the sender. `resend.secretName` and `resend.apiKeyKey` SHALL name the Secret and key that hold the API key.
 
 `schedule.enabled` SHALL default to true. `schedule.cron` SHALL default to `0 9 1 * *`.
 
@@ -42,19 +44,32 @@ The chart SHALL accept `image`, `hostname`, `publicURL`, `config`, `access`, `da
 ### Requirement: Config Rendering
 The chart SHALL render one config file from `config`, `publicURL`, and `access`. It SHALL mount the file read-only at `/home/invoicer/.invoicer/config.yaml`.
 
-The config SHALL hold `vendor`, `customer`, `project`, `rate`, `hours`, and `database`, as [Config](config.md) describes. It SHALL hold `baseUrl` from `publicURL` and the `oidc` settings from `access`, as [Access](access.md#requirement-access-configuration) describes. `database` SHALL default to `/data/invoices.db`.
+The config SHALL hold `vendor`, `customer`, `customerEmail`, `project`, `rate`, `hours`, and `database`, as [Config](config.md) describes. It SHALL hold `baseUrl` from `publicURL` and the `oidc` settings from `access`, as [Access](access.md#requirement-access-configuration) describes. `database` SHALL default to `/data/invoices.db`.
 
 The config SHALL name the client secret and cookie key at `/run/secrets/oidc-client-secret` and `/run/secrets/cookie-key`.
+
+When `resend.from` is set, the config SHALL hold the `resend` block with `apiKeyFile` set to `/run/secrets/resend-api-key` and `from` set to `resend.from`, as [Config](config.md#requirement-email-configuration) describes.
 
 The chart SHALL own the config file and SHALL NOT run `invoicer set config`.
 
 #### Scenario: Default config
 - GIVEN default values
 - WHEN the chart renders
-- THEN the config holds the configured vendor, customer, project, rate, hours, and `/data/invoices.db`
+- THEN the config holds the configured vendor, customer, customerEmail, project, rate, hours, and `/data/invoices.db`
 - AND the config holds `baseUrl` equal to `publicURL`
 - AND the config holds the `oidc` settings
 - AND the config names both secret paths
+
+#### Scenario: Resend configured
+- GIVEN a set `resend.from`
+- WHEN the chart renders
+- THEN the config holds a `resend` block with that sender
+- AND the block names `/run/secrets/resend-api-key`
+
+#### Scenario: Resend not configured
+- GIVEN an empty `resend.from`
+- WHEN the chart renders
+- THEN the config holds no `resend` block
 
 #### Scenario: Config change restarts the pod
 - GIVEN an installed chart
@@ -64,15 +79,28 @@ The chart SHALL own the config file and SHALL NOT run `invoicer set config`.
 ### Requirement: Secrets
 The chart SHALL NOT hold secret values. It SHALL mount the existing Secret named by `access.secretName` at `/run/secrets/oidc-client-secret` and `/run/secrets/cookie-key`. The keys SHALL default to `client-secret` and `cookie-key`.
 
+When `resend.from` is set, the chart SHALL mount the existing Secret named by `resend.secretName` at `/run/secrets/resend-api-key`, using the key `resend.apiKeyKey`, which SHALL default to `api-key`.
+
 #### Scenario: Secret values come from an existing Secret
 - GIVEN an existing Secret with a client secret and a cookie key
 - WHEN the chart renders
 - THEN the pod mounts both keys at the named paths
 - AND the rendered manifests hold no secret value
 
+#### Scenario: Resend secret
+- GIVEN a set `resend.from` and the named Secret
+- WHEN the chart renders
+- THEN the schedule pod mounts the key at `/run/secrets/resend-api-key`
+- AND the web pod mounts no Resend secret
+
 #### Scenario: Missing Secret
 - GIVEN the named Secret does not exist
 - WHEN the web pod starts
+- THEN the pod does not start
+
+#### Scenario: Missing Resend Secret
+- GIVEN a set `resend.from` and no named Secret
+- WHEN the schedule pod starts
 - THEN the pod does not start
 
 ### Requirement: Storage
@@ -103,6 +131,8 @@ The pod SHALL run as user 1000 with group 1000 and fsGroup 1000. It SHALL use a 
 
 The web container SHALL use `resources` as its CPU and memory requests and limits.
 
+The web container SHALL NOT send email and SHALL mount no Resend secret.
+
 The chart SHALL set a grace period that covers the web app's shutdown timeout, as [Web](web.md#requirement-web-command) describes.
 
 #### Scenario: Web pod
@@ -132,7 +162,7 @@ The chart SHALL set a grace period that covers the web app's shutdown timeout, a
 ### Requirement: Schedule Workload
 The chart SHALL render one CronWorkflow in the `invoicer` namespace when `schedule.enabled` is true and SHALL render none when it is false. The CronWorkflow SHALL use `schedule.cron` in UTC and SHALL allow one run at a time.
 
-The workflow SHALL run one pod from the [container image](container.md) with the `generate` argument. The pod SHALL mount the config file and the data claim as the web pod does. It SHALL attach every `image.pullSecrets` entry and SHALL use the web pod's security context and `resources`. It SHALL use pod affinity to run on the web pod's node.
+The workflow SHALL run one pod from the [container image](container.md) with the `generate` argument. The pod SHALL mount the config file and the data claim as the web pod does. When `resend.from` is set, it SHALL mount the Resend API key at `/run/secrets/resend-api-key`. It SHALL attach every `image.pullSecrets` entry and SHALL use the web pod's security context and `resources`. It SHALL use pod affinity to run on the web pod's node.
 
 The CronWorkflow SHALL retry a failed pod twice. It SHALL remove a successful run after one day and SHALL keep a failed run.
 
@@ -163,6 +193,11 @@ The chart SHALL NOT install Argo Workflows.
 - AND it uses user and group 1000
 - AND it uses the configured resources
 - AND it runs on the web pod's node
+
+#### Scenario: Schedule pod sends email
+- GIVEN a set `resend.from`
+- WHEN the workflow renders
+- THEN its pod mounts the Resend API key
 
 ### Requirement: Service
 The chart SHALL create a ClusterIP Service on `service.port` that forwards to 8080.
