@@ -12,8 +12,16 @@ spec:
   concurrencyPolicy: Forbid
   workflowSpec:
     entrypoint: generate
+    {{- with .Values.image.pullSecrets }}
+    imagePullSecrets:
+      {{- range . }}
+      - name: {{ . | quote }}
+      {{- end }}
+    {{- end }}
     templates:
       - name: generate
+        securityContext:
+          {{- include "invoicer.podSecurityContext" . | nindent 10 }}
         volumes:
           - name: config
             configMap:
@@ -27,6 +35,10 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
             - generate
+          securityContext:
+            {{- include "invoicer.containerSecurityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: config
               mountPath: /home/invoicer/.invoicer/config.yaml

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -686,6 +687,11 @@ func TestNoImagePullSecretsByDefault(t *testing.T) {
 	manifests := renderChart(t)
 
 	equalsAny(t, "web imagePullSecrets", pullSecretNames(t, deploymentPodSpec(t, manifests)), nil)
+
+	workflowSpec := cronWorkflowWorkflowSpec(t, manifests)
+	if secrets, ok := workflowSpec["imagePullSecrets"]; ok && secrets != nil {
+		t.Fatalf("schedule imagePullSecrets: got %v, want none", secrets)
+	}
 }
 
 func TestDeploymentRestartsWhenConfigChanges(t *testing.T) {
@@ -870,6 +876,15 @@ func cronWorkflowSpec(t *testing.T, manifests []map[string]any) map[string]any {
 	return spec
 }
 
+func cronWorkflowWorkflowSpec(t *testing.T, manifests []map[string]any) map[string]any {
+	t.Helper()
+	workflowSpec, ok := cronWorkflowSpec(t, manifests)["workflowSpec"].(map[string]any)
+	if !ok {
+		t.Fatal("CronWorkflow has no workflowSpec")
+	}
+	return workflowSpec
+}
+
 func TestScheduleRendersOneCronWorkflow(t *testing.T) {
 	manifests := renderChart(t)
 
@@ -893,7 +908,7 @@ func TestScheduleRendersOneCronWorkflow(t *testing.T) {
 
 func cronWorkflowTemplate(t *testing.T, manifests []map[string]any) map[string]any {
 	t.Helper()
-	workflowSpec, _ := cronWorkflowSpec(t, manifests)["workflowSpec"].(map[string]any)
+	workflowSpec := cronWorkflowWorkflowSpec(t, manifests)
 	entrypoint, _ := workflowSpec["entrypoint"].(string)
 	if entrypoint == "" {
 		t.Fatal("CronWorkflow has no entrypoint")
@@ -942,6 +957,66 @@ func TestSchedulePodMountsData(t *testing.T) {
 func TestSchedulePodMountsExistingDataClaim(t *testing.T) {
 	manifests := renderChart(t, "--set", "data.existingClaim=shared-data")
 	assertDataMount(t, cronWorkflowTemplate(t, manifests), cronWorkflowContainer(t, manifests), "shared-data")
+}
+
+func TestSchedulePodUsesPullSecrets(t *testing.T) {
+	manifests := renderChart(t, "--set", "image.pullSecrets={registry-a,registry-b}")
+	want := []any{"registry-a", "registry-b"}
+
+	equalsAny(t, "schedule imagePullSecrets", pullSecretNames(t, cronWorkflowWorkflowSpec(t, manifests)), want)
+	equalsAny(t, "web imagePullSecrets", pullSecretNames(t, deploymentPodSpec(t, manifests)), want)
+}
+
+func TestSchedulePodSecurityContext(t *testing.T) {
+	manifests := renderChart(t)
+	assertSameSecurityContext(t,
+		cronWorkflowTemplate(t, manifests), cronWorkflowContainer(t, manifests),
+		deploymentPodSpec(t, manifests), webContainer(t, manifests),
+	)
+}
+
+func assertSameSecurityContext(t *testing.T, pod, container, webPod, webContainer map[string]any) {
+	t.Helper()
+
+	webPodSecurity, _ := webPod["securityContext"].(map[string]any)
+	if len(webPodSecurity) == 0 {
+		t.Fatal("web pod has no security context")
+	}
+	podSecurity, _ := pod["securityContext"].(map[string]any)
+	equalsMap(t, "pod securityContext", podSecurity, webPodSecurity)
+
+	webContainerSecurity, _ := webContainer["securityContext"].(map[string]any)
+	if len(webContainerSecurity) == 0 {
+		t.Fatal("web container has no security context")
+	}
+	containerSecurity, _ := container["securityContext"].(map[string]any)
+	equalsMap(t, "container securityContext", containerSecurity, webContainerSecurity)
+}
+
+func TestSchedulePodUsesResources(t *testing.T) {
+	manifests := renderChart(t)
+	resources, _ := webContainer(t, manifests)["resources"].(map[string]any)
+	if len(resources) == 0 {
+		t.Fatal("web container has no resources")
+	}
+
+	equalsMap(t, "schedule resources", cronWorkflowContainer(t, manifests)["resources"], resources)
+}
+
+func TestSchedulePodUsesResourceValues(t *testing.T) {
+	manifests := renderChart(t,
+		"--set", "resources.requests.cpu=100m",
+		"--set", "resources.requests.memory=128Mi",
+		"--set", "resources.limits.cpu=750m",
+		"--set", "resources.limits.memory=512Mi",
+	)
+	want := map[string]any{
+		"requests": map[string]any{"cpu": "100m", "memory": "128Mi"},
+		"limits":   map[string]any{"cpu": "750m", "memory": "512Mi"},
+	}
+
+	equalsMap(t, "web resources", webContainer(t, manifests)["resources"], want)
+	equalsMap(t, "schedule resources", cronWorkflowContainer(t, manifests)["resources"], want)
 }
 
 func TestScheduleUsesDefaultCron(t *testing.T) {
@@ -993,6 +1068,13 @@ func equalsAny(t *testing.T, name string, got any, want []any) {
 		if values[i] != want[i] {
 			t.Fatalf("%s: got %v, want %v", name, got, want)
 		}
+	}
+}
+
+func equalsMap(t *testing.T, name string, got, want any) {
+	t.Helper()
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("%s: got %v, want %v", name, got, want)
 	}
 }
 
