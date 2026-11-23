@@ -1176,7 +1176,7 @@ func TestScheduleRemovesSuccessfulRunAfterOneDay(t *testing.T) {
 func TestScheduleUsesDefaultCron(t *testing.T) {
 	spec := cronWorkflowSpec(t, renderChart(t))
 
-	equal(t, "schedule", spec["schedule"], "0 9 1 * *")
+	equalsAny(t, "schedules", spec["schedules"], []any{"0 9 1 * *"})
 	equal(t, "timezone", spec["timezone"], "UTC")
 	equal(t, "concurrencyPolicy", spec["concurrencyPolicy"], "Forbid")
 }
@@ -1184,7 +1184,7 @@ func TestScheduleUsesDefaultCron(t *testing.T) {
 func TestScheduleUsesCronValue(t *testing.T) {
 	spec := cronWorkflowSpec(t, renderChart(t, "--set", "schedule.cron=30 6 2 * *"))
 
-	equal(t, "schedule", spec["schedule"], "30 6 2 * *")
+	equalsAny(t, "schedules", spec["schedules"], []any{"30 6 2 * *"})
 	equal(t, "timezone", spec["timezone"], "UTC")
 }
 

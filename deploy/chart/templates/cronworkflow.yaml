@@ -7,7 +7,8 @@ metadata:
   labels:
     {{- include "invoicer.labels" . | nindent 4 }}
 spec:
-  schedule: {{ .Values.schedule.cron | quote }}
+  schedules:
+    - {{ .Values.schedule.cron | quote }}
   timezone: UTC
   concurrencyPolicy: Forbid
   workflowSpec:
