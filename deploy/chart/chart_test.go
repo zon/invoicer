@@ -1078,7 +1078,10 @@ func TestScheduleUsesCronValue(t *testing.T) {
 }
 
 func TestScheduleDisabledRendersNoCronWorkflow(t *testing.T) {
-	for _, manifest := range renderChart(t, "--set", "schedule.enabled=false") {
+	manifests := renderChart(t, "--set", "schedule.enabled=false")
+
+	findManifest(t, manifests, "apps/v1", "Deployment")
+	for _, manifest := range manifests {
 		if manifest["kind"] == "CronWorkflow" {
 			t.Fatal("chart renders a CronWorkflow when disabled")
 		}
