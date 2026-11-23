@@ -29,6 +29,7 @@ invoicer [<month> [<year>]] [options]
 |--------|-------|-------------|
 | `--vendor` | `-v` | Name of the contractor sending the invoice. Required if not set in config. |
 | `--customer` | `-c` | Name of the customer receiving the invoice. Required if not set in config. |
+| `--customer-email` | | Email address that receives the invoice email. Defaults to the `customerEmail` config value. |
 | `--project` | | Project name to store with the invoice. Optional. |
 | `--database` | | Path to the invoice database. Defaults to `~/.invoicer/invoices.db`. |
 | `--rate` | `-r` | Hourly rate in dollars. Required if not set in config. |
@@ -66,13 +67,30 @@ Store common options in `~/.invoicer/config.yaml` to avoid repeating them on eve
 ```yaml
 vendor: Jane Smith
 customer: Acme Corp
+customerEmail: billing@acme.com
 rate: 150
 hours: 40
 project: Website Redesign
 database: ~/.invoicer/invoices.db
 ```
 
-The web app also reads `baseUrl` and `oidc` settings from the same file, as [Access Settings](#access-settings) describes.
+The web app also reads `baseUrl` and `oidc` settings from the same file, as [Access Settings](#access-settings) describes. Generate reads `customerEmail` and `resend` settings from the same file, as [Email Settings](#email-settings) describes.
+
+### Email Settings
+
+Generate can email the invoice to the customer. Set `customerEmail` and a `resend` block:
+
+```yaml
+customerEmail: billing@acme.com
+baseUrl: https://invoices.example.com
+resend:
+  apiKeyFile: /run/secrets/resend-api-key
+  from: invoicer@example.com
+```
+
+`customerEmail` receives the invoice email. `--customer-email` overrides the config value. `resend.apiKeyFile` names a readable file with the Resend API key. `resend.from` is the sender address on a verified Resend domain.
+
+When the config holds any `resend` value, generate requires `customerEmail`, `baseUrl`, `resend.apiKeyFile`, and `resend.from`. It exits with an error before it saves when one is missing. Without `resend` settings, generate saves the invoice and sends nothing.
 
 ### `set config` Subcommand
 
@@ -86,12 +104,13 @@ invoicer set config [options]
 |--------|-------------|
 | `--vendor` | Name of the contractor sending the invoice. |
 | `--customer` | Name of the customer receiving the invoice. |
+| `--customer-email` | Email address that receives the invoice email. |
 | `--project` | Project name to store with invoices. |
 | `--database` | Path to the invoice database. |
 | `--rate` | Hourly rate in dollars. |
 | `--hours` | Hours worked per week. |
 
-Invoicer creates the config file and its directory (`~/.invoicer/`) when they do not exist.
+Invoicer creates the config file and its directory (`~/.invoicer/`) when they do not exist. The command writes `customerEmail` and leaves the `resend` block unchanged. Edit the file to configure email sending.
 
 #### Examples
 
@@ -125,6 +144,14 @@ Edited invoice for October 2026: 3F9K2M8Q1X
 ```
 
 Changing the customer or project replaces the stored values and keeps the identifier. A paid invoice blocks generation until an admin user marks it unpaid in the web app.
+
+### Invoice Email
+
+With email settings, generate sends the invoice email after it saves the invoice. The email goes to the stored contact email and links to the invoice detail page. Generate prints the recipient and the Resend email identifier after Resend accepts the message.
+
+The email sends once. A later generate for an invoice with a send time sends nothing, so an edit does not send a second email. Generate sends nothing for a paid invoice.
+
+A failed send reports an error and exits non-zero. The invoice stays stored without a send time, so a later generate sends it again. A timeout, a rejected message, and a missing or unreadable API key file count as failed sends.
 
 ## Removing an Invoice
 
@@ -241,7 +268,16 @@ kubectl -n invoicer create secret generic invoicer-oidc \
   --from-file=cookie-key=./cookie-key
 ```
 
-The default keys are `client-secret` and `cookie-key`. `access.clientSecretKey` and `access.cookieKeyKey` name other keys.
+For email, create the Resend Secret with the API key:
+
+```bash
+kubectl -n invoicer create secret generic invoicer-resend \
+  --from-file=api-key=./resend-api-key
+```
+
+The default keys are `client-secret` and `cookie-key`. `access.clientSecretKey` and `access.cookieKeyKey` name other keys. The Resend key defaults to `api-key`. `resend.apiKeyKey` names another key, and `resend.secretName` names another Secret.
+
+The chart renders `config.customerEmail` and `resend.from` into the invoicer config. When `resend.from` is empty, the chart renders no `resend` block and mounts no Resend Secret, so generate sends no email. Otherwise, the schedule pod mounts the API key at `/run/secrets/resend-api-key`. The web app does not send email and mounts no Resend Secret.
 
 Then install the chart:
 
@@ -252,7 +288,7 @@ helm install invoicer deploy/chart --namespace invoicer \
   --set access.issuer=https://id.example.com
 ```
 
-Set `hostname` and `publicURL` to the public address and `access` to the OIDC provider. The defaults live in `deploy/chart/values.yaml`. The chart creates the web Deployment, Service, claim, Ingress, and Certificate.
+Set `hostname` and `publicURL` to the public address. Set `access` to the OIDC provider, `resend.from` to the sender, and `config.customerEmail` to the recipient. The defaults live in `deploy/chart/values.yaml`. The chart creates the web Deployment, Service, claim, Ingress, and Certificate.
 
 ## Development
 
