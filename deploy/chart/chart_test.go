@@ -355,6 +355,7 @@ func assertConfigMount(t *testing.T, manifests []map[string]any, pod, container 
 		if mount["readOnly"] != true {
 			t.Fatal("config file is not mounted read-only")
 		}
+		equal(t, "config file subPath", mount["subPath"], "config.yaml")
 		volumeName, _ = mount["name"].(string)
 	}
 	if volumeName == "" {
