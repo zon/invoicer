@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 env:
   IMAGE: ghcr.io/zon/invoicer
@@ -37,3 +38,12 @@ jobs:
         run: podman save --output /tmp/invoicer-image.tar "$IMAGE:ci"
       - name: Scan the image
         run: trivy image --input /tmp/invoicer-image.tar --severity HIGH,CRITICAL --exit-code 1
+      - name: Log in to the container registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io --username "${{ github.actor }}" --password-stdin
+      - name: Publish the image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          podman tag "$IMAGE:ci" "$IMAGE:sha-${GITHUB_SHA:0:7}"
+          podman push "$IMAGE:sha-${GITHUB_SHA:0:7}"

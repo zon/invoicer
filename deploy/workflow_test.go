@@ -22,9 +22,10 @@ func repoRoot(t *testing.T) string {
 }
 
 type workflow struct {
-	Env  map[string]string      `yaml:"env"`
-	On   map[string]yaml.Node   `yaml:"on"`
-	Jobs map[string]workflowJob `yaml:"jobs"`
+	Env         map[string]string      `yaml:"env"`
+	On          map[string]yaml.Node   `yaml:"on"`
+	Permissions map[string]string      `yaml:"permissions"`
+	Jobs        map[string]workflowJob `yaml:"jobs"`
 }
 
 type workflowJob struct {
@@ -298,6 +299,83 @@ func TestWorkflowStopsBeforePublishingWhenScanFails(t *testing.T) {
 	}
 }
 
+func TestWorkflowPublishesMainPushToRegistry(t *testing.T) {
+	workflow := loadWorkflow(t)
+	steps := pipelineSteps(t, workflow)
+
+	publish := stepIndexMatching(steps, isPublishing)
+	if publish < 0 {
+		t.Fatalf("workflow does not publish the image:\n%s", renderSteps(steps))
+	}
+	step := steps[publish]
+	if !strings.Contains(step.If, "github.event_name == 'push'") || !strings.Contains(step.If, "refs/heads/main") {
+		t.Fatalf("publish step does not run only on main pushes: %q", step.If)
+	}
+	if image := workflow.Env["IMAGE"]; image != "ghcr.io/zon/invoicer" {
+		t.Fatalf("workflow publishes to %q, want ghcr.io/zon/invoicer", image)
+	}
+	if !referencesImage(step.Run) {
+		t.Fatalf("publish step does not use the workflow IMAGE:\n%s", step.Run)
+	}
+	if !strings.Contains(step.Run, "sha-") || !strings.Contains(step.Run, "GITHUB_SHA") {
+		t.Fatalf("publish step does not tag the image with the short commit:\n%s", step.Run)
+	}
+
+	build := stepIndexMatching(steps, buildsImage)
+	if build < 0 {
+		t.Fatal("workflow does not build the image")
+	}
+	if tag := builtImageTag(steps[build].Run); !strings.Contains(step.Run, tag) {
+		t.Fatalf("publish step does not use the built image %s:\n%s", tag, step.Run)
+	}
+}
+
+func TestWorkflowPublishesNoLatestTag(t *testing.T) {
+	for _, job := range loadWorkflow(t).Jobs {
+		for _, step := range job.Steps {
+			if strings.Contains(strings.ToLower(step.Run), "latest") {
+				t.Fatalf("step publishes or tags a latest image:\n%s", step.Run)
+			}
+		}
+	}
+}
+
+func TestWorkflowGrantsPackageWrite(t *testing.T) {
+	permissions := loadWorkflow(t).Permissions
+
+	if got := permissions["packages"]; got != "write" {
+		t.Fatalf("workflow package permission: got %q, want write", got)
+	}
+	if got := permissions["contents"]; got != "read" {
+		t.Fatalf("workflow contents permission: got %q, want read", got)
+	}
+}
+
+func TestWorkflowPublishesWithGitHubToken(t *testing.T) {
+	steps := pipelineSteps(t, loadWorkflow(t))
+
+	login := stepIndexMatching(steps, logsInToRegistry)
+	if login < 0 {
+		t.Fatalf("workflow does not log in to the registry:\n%s", renderSteps(steps))
+	}
+	publish := stepIndexMatching(steps, isPublishing)
+	if publish < 0 || login > publish {
+		t.Fatalf("workflow logs in at %d but publishes at %d", login, publish)
+	}
+	if !strings.Contains(steps[login].Run, "secrets.GITHUB_TOKEN") {
+		t.Fatalf("registry login does not use the workflow GITHUB_TOKEN:\n%s", steps[login].Run)
+	}
+
+	secret := regexp.MustCompile(`secrets\.([A-Za-z0-9_]+)`)
+	for _, step := range steps {
+		for _, match := range secret.FindAllStringSubmatch(step.Uses+"\n"+step.Run, -1) {
+			if match[1] != "GITHUB_TOKEN" {
+				t.Fatalf("step uses secret %s instead of the workflow GITHUB_TOKEN", match[1])
+			}
+		}
+	}
+}
+
 // pipelineJob returns the job that builds the image.
 func pipelineJob(t *testing.T, workflow workflow) workflowJob {
 	t.Helper()
@@ -328,6 +406,10 @@ func lintsChart(step workflowStep) bool {
 
 func savesImage(step workflowStep) bool {
 	return strings.Contains(step.Run, "podman save")
+}
+
+func logsInToRegistry(step workflowStep) bool {
+	return strings.Contains(step.Run, "podman login") && strings.Contains(step.Run, "ghcr.io")
 }
 
 func scansImage(step workflowStep) bool {
