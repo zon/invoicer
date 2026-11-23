@@ -1,0 +1,27 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "invoicer.fullname" . }}
+  labels:
+    {{- include "invoicer.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.certificate.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.hostname | quote }}
+      secretName: {{ printf "%s-tls" .Values.certificate.name }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.hostname | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "invoicer.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}

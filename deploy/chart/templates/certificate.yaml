@@ -1,0 +1,15 @@
+{{- if .Values.certificate.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.certificate.name }}
+  labels:
+    {{- include "invoicer.labels" . | nindent 4 }}
+spec:
+  secretName: {{ printf "%s-tls" .Values.certificate.name }}
+  dnsNames:
+    - {{ .Values.hostname | quote }}
+  issuerRef:
+    name: {{ .Values.certificate.issuer }}
+    kind: ClusterIssuer
+{{- end }}

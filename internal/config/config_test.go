@@ -279,6 +279,19 @@ func TestSave_SavesDatabase(t *testing.T) {
 	}
 }
 
+func TestDefaultPath(t *testing.T) {
+	t.Setenv("HOME", "/home/invoicer")
+
+	got, err := config.DefaultPath()
+	if err != nil {
+		t.Fatalf("DefaultPath: %v", err)
+	}
+	want := "/home/invoicer/.invoicer/config.yaml"
+	if got != want {
+		t.Errorf("DefaultPath: got %q, want %q", got, want)
+	}
+}
+
 func TestDefaultDatabasePath(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil {

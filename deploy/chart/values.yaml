@@ -1,0 +1,51 @@
+image:
+  repository: ghcr.io/zon/invoicer
+  tag: ""
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+hostname: invoices.haralovich.com
+publicURL: https://invoices.haralovich.com
+
+config:
+  vendor: Jane Smith
+  customer: Acme Corp
+  project: Website Redesign
+  rate: 150
+  hours: 40
+  database: /data/invoices.db
+
+access:
+  issuer: https://id.haralovich.org
+  clientId: invoicer
+  adminGroup: invoicer-admins
+  customerGroup: invoicer-customers
+  groupsClaim: groups
+  secretName: invoicer-oidc
+  clientSecretKey: client-secret
+  cookieKeyKey: cookie-key
+
+data:
+  size: 1Gi
+  storageClass: reliable
+  existingClaim: ""
+
+service:
+  port: 80
+
+ingress:
+  enabled: true
+  className: traefik
+
+certificate:
+  enabled: true
+  name: invoicer
+  issuer: lets-encrypt
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi

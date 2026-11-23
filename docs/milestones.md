@@ -4,7 +4,7 @@ High level objectives. Work through them in order. See [process](zpecs/process.m
 
 ## Container and chart
 
-One container image runs the CLI and the web app. A Helm chart deploys the web app with a persistent volume for the SQLite database and its OIDC configuration. The chart can also run the CLI against the same database.
+One container image runs the CLI and the web app. A Helm chart deploys the web app with a persistent volume for the SQLite database and its OIDC configuration.
 
 ## Build and deploy pipeline
 
