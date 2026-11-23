@@ -14,10 +14,21 @@ const (
 	imagePublishTestCommit  = "abc1234def5678"
 	imagePublishTestShort   = "abc1234"
 	imagePublishTestLocal   = "ghcr.io/zon/invoicer:ci"
+	imagePublishTestDigest  = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	imagePublishOtherDigest = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
 )
 
-// newImagePublishTools returns a directory holding fake skopeo and podman commands
-// that record their calls.
+// imageRegistry describes how the fake registry answers for the commit tag and
+// the app version tag. A mode of missing, present, or denied matches a tag.
+type imageRegistry struct {
+	shaMode       string
+	shaDigest     string
+	versionMode   string
+	versionDigest string
+}
+
+// newImagePublishTools returns a directory holding fake skopeo and podman
+// commands that record their calls and answer for each tag.
 func newImagePublishTools(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -31,9 +42,19 @@ shift
 
 case "$command" in
 	inspect)
-		case "${FAKE_INSPECT_MODE:-missing}" in
+		case "$1" in
+			*":sha-"*)
+				mode=${FAKE_SHA_MODE:-missing}
+				digest=${FAKE_SHA_DIGEST:-}
+				;;
+			*)
+				mode=${FAKE_VERSION_MODE:-missing}
+				digest=${FAKE_VERSION_DIGEST:-}
+				;;
+		esac
+		case "$mode" in
 			present)
-				printf '%s\n' '{"Digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}'
+				printf '{"Digest":"%s"}\n' "$digest"
 				;;
 			denied)
 				echo "Error: unauthorized: authentication required" >&2
@@ -80,7 +101,7 @@ type imagePublisherResult struct {
 }
 
 // runImagePublisher runs the image publisher against fake registry tools.
-func runImagePublisher(t *testing.T, inspectMode string) imagePublisherResult {
+func runImagePublisher(t *testing.T, registry imageRegistry) imagePublisherResult {
 	t.Helper()
 	toolsDir := newImagePublishTools(t)
 	logDir := t.TempDir()
@@ -93,7 +114,10 @@ func runImagePublisher(t *testing.T, inspectMode string) imagePublisherResult {
 		"PATH="+toolsDir+":"+os.Getenv("PATH"),
 		"SKOPEO_LOG="+skopeoLog,
 		"PODMAN_LOG="+podmanLog,
-		"FAKE_INSPECT_MODE="+inspectMode,
+		"FAKE_SHA_MODE="+registry.shaMode,
+		"FAKE_SHA_DIGEST="+registry.shaDigest,
+		"FAKE_VERSION_MODE="+registry.versionMode,
+		"FAKE_VERSION_DIGEST="+registry.versionDigest,
 	)
 	output, err := cmd.CombinedOutput()
 
@@ -118,7 +142,7 @@ func imageToolCall(log, command string) string {
 }
 
 func TestPublishImageScriptTagsNewCommit(t *testing.T) {
-	result := runImagePublisher(t, "missing")
+	result := runImagePublisher(t, imageRegistry{})
 
 	if result.err != nil {
 		t.Fatalf("publish image: %v\n%s", result.err, result.output)
@@ -136,7 +160,7 @@ func TestPublishImageScriptTagsNewCommit(t *testing.T) {
 }
 
 func TestPublishImageScriptTagsPublishedCommit(t *testing.T) {
-	result := runImagePublisher(t, "present")
+	result := runImagePublisher(t, imageRegistry{shaMode: "present", shaDigest: imagePublishTestDigest})
 
 	if result.err != nil {
 		t.Fatalf("publish image: %v\n%s", result.err, result.output)
@@ -151,8 +175,69 @@ func TestPublishImageScriptTagsPublishedCommit(t *testing.T) {
 	}
 }
 
+func TestPublishImageScriptSkipsPublishedVersion(t *testing.T) {
+	result := runImagePublisher(t, imageRegistry{
+		shaMode:       "present",
+		shaDigest:     imagePublishTestDigest,
+		versionMode:   "present",
+		versionDigest: imagePublishTestDigest,
+	})
+
+	if result.err != nil {
+		t.Fatalf("publish image: %v\n%s", result.err, result.output)
+	}
+	if push := imageToolCall(result.podman, "push"); push != "" {
+		t.Fatalf("image pushed although the version tag is already published: %q", push)
+	}
+	if copy := imageToolCall(result.skopeo, "copy"); copy != "" {
+		t.Fatalf("version tag copied although it is already published: %q", copy)
+	}
+}
+
+func TestPublishImageScriptStopsOnDifferentVersionDigest(t *testing.T) {
+	result := runImagePublisher(t, imageRegistry{
+		shaMode:       "present",
+		shaDigest:     imagePublishTestDigest,
+		versionMode:   "present",
+		versionDigest: imagePublishOtherDigest,
+	})
+
+	if result.err == nil {
+		t.Fatalf("publish image reused the version tag at a different digest:\n%s", result.output)
+	}
+	if !strings.Contains(result.output, imagePublishTestVersion) {
+		t.Fatalf("publish image does not report the version tag:\n%s", result.output)
+	}
+	if !strings.Contains(result.output, imagePublishTestDigest) || !strings.Contains(result.output, imagePublishOtherDigest) {
+		t.Fatalf("publish image does not report both digests:\n%s", result.output)
+	}
+	if push := imageToolCall(result.podman, "push"); push != "" {
+		t.Fatalf("image pushed although the version tag points to another image: %q", push)
+	}
+	if copy := imageToolCall(result.skopeo, "copy"); copy != "" {
+		t.Fatalf("version tag copied although it points to another image: %q", copy)
+	}
+}
+
+func TestPublishImageScriptStopsWhenVersionPublishedWithoutCommit(t *testing.T) {
+	result := runImagePublisher(t, imageRegistry{
+		versionMode:   "present",
+		versionDigest: imagePublishTestDigest,
+	})
+
+	if result.err == nil {
+		t.Fatalf("publish image reused the version tag without a published commit image:\n%s", result.output)
+	}
+	if push := imageToolCall(result.podman, "push"); push != "" {
+		t.Fatalf("image pushed although the version tag is already published: %q", push)
+	}
+	if copy := imageToolCall(result.skopeo, "copy"); copy != "" {
+		t.Fatalf("version tag copied although it is already published: %q", copy)
+	}
+}
+
 func TestPublishImageScriptStopsOnFailedCheck(t *testing.T) {
-	result := runImagePublisher(t, "denied")
+	result := runImagePublisher(t, imageRegistry{shaMode: "denied"})
 
 	if result.err == nil {
 		t.Fatalf("publish image ignored a failed registry check:\n%s", result.output)
@@ -162,5 +247,23 @@ func TestPublishImageScriptStopsOnFailedCheck(t *testing.T) {
 	}
 	if copy := imageToolCall(result.skopeo, "copy"); copy != "" {
 		t.Fatalf("version tag copied after a failed registry check: %q", copy)
+	}
+}
+
+func TestPublishImageScriptStopsOnFailedVersionCheck(t *testing.T) {
+	result := runImagePublisher(t, imageRegistry{
+		shaMode:     "present",
+		shaDigest:   imagePublishTestDigest,
+		versionMode: "denied",
+	})
+
+	if result.err == nil {
+		t.Fatalf("publish image ignored a failed version check:\n%s", result.output)
+	}
+	if push := imageToolCall(result.podman, "push"); push != "" {
+		t.Fatalf("image pushed after a failed version check: %q", push)
+	}
+	if copy := imageToolCall(result.skopeo, "copy"); copy != "" {
+		t.Fatalf("version tag copied after a failed version check: %q", copy)
 	}
 }
