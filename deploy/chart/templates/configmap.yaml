@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "invoicer.fullname" . }}-config
+  labels:
+    {{- include "invoicer.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    vendor: {{ .Values.config.vendor | quote }}
+    customer: {{ .Values.config.customer | quote }}
+    project: {{ .Values.config.project | quote }}
+    rate: {{ .Values.config.rate }}
+    hours: {{ .Values.config.hours }}
+    database: {{ .Values.config.database | default "/data/invoices.db" | quote }}
+    baseUrl: {{ .Values.publicURL | quote }}
+    oidc:
+      issuer: {{ .Values.access.issuer | quote }}
+      clientId: {{ .Values.access.clientId | quote }}
+      clientSecretFile: "/run/secrets/oidc-client-secret"
+      cookieKeyFile: "/run/secrets/cookie-key"
+      adminGroup: {{ .Values.access.adminGroup | quote }}
+      customerGroup: {{ .Values.access.customerGroup | quote }}
+      groupsClaim: {{ .Values.access.groupsClaim | quote }}

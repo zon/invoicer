@@ -1,0 +1,6 @@
+{{define "header"}}<header>
+  <h1>Invoices</h1>
+  {{with .User}}
+  <p class="account"><span>{{.Email}}</span> <a href="/logout">Sign out</a></p>
+  {{end}}
+</header>{{end}}

@@ -1,3 +1,7 @@
 *.html
+!internal/web/templates/*.html
 *.pdf
+bin/
 invoices/
+tmp/
+*.log

@@ -1,0 +1,35 @@
+FROM golang:1.25.14-alpine3.24 AS build
+
+RUN apk add --no-cache gcc musl-dev
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY cmd ./cmd
+COPY internal ./internal
+
+ARG VERSION=dev
+
+RUN CGO_ENABLED=1 GOOS=linux go build -trimpath \
+    -ldflags="-s -w -X github.com/zon/invoicer/internal/cli.Version=${VERSION}" \
+    -o /out/invoicer ./cmd/invoicer
+
+FROM alpine:3.24.4
+
+RUN apk add --no-cache ca-certificates \
+    && addgroup -g 1000 invoicer \
+    && adduser -D -u 1000 -G invoicer -h /home/invoicer invoicer \
+    && mkdir -p /home/invoicer/.invoicer \
+    && chown -R 1000:1000 /home/invoicer
+
+COPY --from=build /out/invoicer /usr/local/bin/invoicer
+
+ENV HOME=/home/invoicer
+
+USER 1000:1000
+
+EXPOSE 8080
+
+ENTRYPOINT ["/usr/local/bin/invoicer"]

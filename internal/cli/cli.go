@@ -2,23 +2,37 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
+	"github.com/alecthomas/kong"
 	"github.com/zon/invoicer/internal/config"
 	"github.com/zon/invoicer/internal/invoice"
+	"github.com/zon/invoicer/internal/store"
 )
 
-// DefaultModel is the opencode model used when neither the CLI nor config specifies one.
-const DefaultModel = "deepseek/deepseek-flash"
+const defaultWebAddress = ":8080"
+
+// Version is the app version reported by --version. The build stamps it with
+// -ldflags. A binary without a stamp reports "dev".
+var Version = "dev"
 
 // CLI is the root command for invoicer.
 type CLI struct {
+	// Version prints the app version and exits.
+	Version kong.VersionFlag `help:"Print the app version and exit."`
+
 	// Generate is the default subcommand for generating an invoice.
 	Generate GenerateCmd `cmd:"" default:"withargs" help:"Generate an invoice for a given month."`
 
 	// Set is the 'set' subcommand group for managing configuration.
 	Set SetCmd `cmd:"" name:"set" help:"Subcommands for managing invoicer configuration."`
+
+	// Web is the subcommand for serving the invoice web app.
+	Web WebCmd `cmd:"" help:"Start the invoice web server."`
 }
 
 // GenerateCmd is the default subcommand for generating an invoice.
@@ -32,46 +46,34 @@ type GenerateCmd struct {
 	// Vendor is the name of the contractor sending the invoice.
 	Vendor string `short:"v" help:"Name of the contractor sending the invoice. Required without config."`
 
-	// Customer is the name of the client receiving the invoice.
-	Customer string `short:"c" help:"Name of the client receiving the invoice. Required without config."`
+	// Customer is the name of the customer receiving the invoice.
+	Customer string `short:"c" help:"Name of the customer receiving the invoice. Required without config."`
 
 	// Project is an optional project name to annotate the invoice with.
 	Project string `help:"Name of the project to annotate the invoice with."`
+
+	// Database is the path to the invoice database.
+	Database string `help:"Path to the invoice database. Defaults to ~/.invoicer/invoices.db."`
 
 	// Rate is the hourly rate for the contractor.
 	Rate float64 `short:"r" help:"Hourly rate in dollars. Required without config."`
 
 	// Hours is the number of hours per week worked.
 	Hours float64 `short:"H" help:"Hours per week worked. Required without config."`
-
-	// PDF controls whether the HTML invoice is converted to a PDF.
-	PDF bool `short:"p" help:"Convert the HTML invoice to a PDF file. Defaults to false."`
-
-	// Model is the opencode-formatted model stub to use for generation.
-	Model string `short:"m" help:"opencode-formatted model stub to use for invoice generation. Defaults to deepseek/deepseek-flash."`
 }
 
 // resolveOptions merges config file values with CLI-provided values.
 // CLI values take precedence over config file values.
 // configPath may be empty to use the default path.
 func (c *GenerateCmd) resolveOptions(configPath string) (*ResolvedOptions, error) {
-	if configPath == "" {
-		var err error
-		configPath, err = config.DefaultPath()
-		if err != nil {
-			return nil, fmt.Errorf("determining config path: %w", err)
-		}
-	}
-
-	cfg, err := config.Load(configPath)
+	cfg, err := loadConfig(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("loading config: %w", err)
+		return nil, err
 	}
 
 	opts := &ResolvedOptions{
 		Month: c.Month,
 		Year:  c.Year,
-		PDF:   c.PDF,
 	}
 
 	// Merge string fields: CLI takes precedence, fall back to config.
@@ -101,21 +103,45 @@ func (c *GenerateCmd) resolveOptions(configPath string) (*ResolvedOptions, error
 		opts.Hours = cfg.Hours
 	}
 
-	// Merge PDF: CLI flag (-p) sets to true; if false (not set), use config value.
-	if !c.PDF && cfg.PDF != nil {
-		opts.PDF = *cfg.PDF
-	}
-
-	// Merge model: CLI value takes precedence, then config, then the default.
-	opts.Model = c.Model
-	if opts.Model == "" {
-		opts.Model = cfg.Model
-	}
-	if opts.Model == "" {
-		opts.Model = DefaultModel
+	// Merge database: CLI value takes precedence, then config, then the default.
+	opts.Database, err = databasePath(c.Database, cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	return opts, nil
+}
+
+// loadConfig loads the config at path, or the default config path when empty.
+func loadConfig(configPath string) (*config.Config, error) {
+	if configPath == "" {
+		var err error
+		configPath, err = config.DefaultPath()
+		if err != nil {
+			return nil, fmt.Errorf("determining config path: %w", err)
+		}
+	}
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("loading config: %w", err)
+	}
+	return cfg, nil
+}
+
+// databasePath resolves the database path from the flag, then config, then the default.
+func databasePath(flag string, cfg *config.Config) (string, error) {
+	if flag != "" {
+		return flag, nil
+	}
+	if cfg.Database != "" {
+		return cfg.Database, nil
+	}
+	path, err := config.DefaultDatabasePath()
+	if err != nil {
+		return "", fmt.Errorf("determining default database path: %w", err)
+	}
+	return path, nil
 }
 
 // ResolvedOptions holds the final merged values after CLI and config are combined.
@@ -127,13 +153,17 @@ type ResolvedOptions struct {
 	Project  string
 	Rate     float64
 	Hours    float64
-	PDF      bool
-	Model    string
+	Database string
 }
 
 // Run executes the generate subcommand (invoice generation).
 func (c *GenerateCmd) Run() error {
-	opts, err := c.resolveOptions("")
+	return c.run("", os.Stdout)
+}
+
+// run executes generate with an explicit config path and output writer.
+func (c *GenerateCmd) run(configPath string, out io.Writer) error {
+	opts, err := c.resolveOptions(configPath)
 	if err != nil {
 		return err
 	}
@@ -158,8 +188,6 @@ func (c *GenerateCmd) Run() error {
 		return fmt.Errorf("resolving month/year: %w", err)
 	}
 
-	// Build invoice.
-	weeks := invoice.WeeksForMonth(year, month, opts.Hours)
 	inv := &invoice.Invoice{
 		Month:    month,
 		Year:     year,
@@ -167,37 +195,27 @@ func (c *GenerateCmd) Run() error {
 		Customer: opts.Customer,
 		Project:  opts.Project,
 		Rate:     opts.Rate,
-		Weeks:    weeks,
+		Weeks:    invoice.WeeksForMonth(year, month, opts.Hours),
 	}
 
-	// Determine output paths.
-	dir := invoice.InvoiceDir(inv)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("creating invoice directory: %w", err)
+	s, err := store.Open(opts.Database)
+	if err != nil {
+		return fmt.Errorf("opening invoice database: %w", err)
 	}
-	htmlPath := invoice.InvoiceFilePath(inv, dir)
+	defer s.Close()
 
-	// Generate HTML invoice via opencode.
-	fmt.Printf("Generating invoice for %s %d...\n", month.String(), year)
-	if err := invoice.GenerateHTML(inv, opts.Model, htmlPath); err != nil {
-		return fmt.Errorf("generating HTML invoice: %w", err)
+	id, created, err := s.Save(inv)
+	if errors.Is(err, store.ErrPaid) {
+		return err
 	}
-	fmt.Printf("HTML invoice written to: %s\n", htmlPath)
-
-	// Convert to PDF if requested.
-	if opts.PDF {
-		pdfPath := invoice.PDFFilePath(inv, dir)
-		fmt.Printf("Converting to PDF...\n")
-		if err := invoice.ConvertToPDF(htmlPath, pdfPath); err != nil {
-			return fmt.Errorf("converting to PDF: %w", err)
-		}
-		fmt.Printf("PDF invoice written to: %s\n", pdfPath)
-
-		if err := os.Remove(htmlPath); err != nil {
-			return fmt.Errorf("removing HTML invoice: %w", err)
-		}
-		fmt.Printf("Removed HTML invoice: %s\n", htmlPath)
+	if err != nil {
+		return fmt.Errorf("saving invoice: %w", err)
 	}
 
+	action := "Edited"
+	if created {
+		action = "Created"
+	}
+	fmt.Fprintf(out, "%s invoice for %s %d: %s\n", action, month.String(), year, strings.ToUpper(id))
 	return nil
 }

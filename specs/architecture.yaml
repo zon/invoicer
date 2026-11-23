@@ -1,0 +1,26 @@
+- path: .github/workflows
+  description: Builds, scans, and publishes the container image and chart.
+
+- path: deploy/chart
+  description: Deploys the web app to Kubernetes with Helm.
+
+- path: deploy/container
+  description: Builds the image that runs the invoice CLI and web app.
+
+- path: internal/access
+  description: Manages sign-in and sessions through an OpenID Connect provider.
+
+- path: internal/cli
+  description: Defines and runs the command-line commands.
+
+- path: internal/config
+  description: Reads and writes the user config file.
+
+- path: internal/invoice
+  description: Computes invoice months, weeks, and totals.
+
+- path: internal/store
+  description: Stores invoices in a SQLite database.
+
+- path: internal/web
+  description: Serves the invoice web app over HTTP.

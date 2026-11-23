@@ -1,6 +1,6 @@
 # invoicer
 
-Generate monthly HTML (and optionally PDF) invoices for hourly contractors. Invoice HTML is written by an AI model via [opencode](https://opencode.ai/) with random creative styling.
+Generate monthly invoices for hourly contractors. The CLI stores invoices and their weekly line items in a SQLite database.
 
 ## Installation
 
@@ -8,7 +8,7 @@ Generate monthly HTML (and optionally PDF) invoices for hourly contractors. Invo
 just install
 ```
 
-Requires `$GOPATH/bin` to be in your `PATH`. Also requires `opencode` to be installed for invoice generation.
+Requires `$GOPATH/bin` to be in your `PATH`.
 
 ## Usage
 
@@ -28,12 +28,12 @@ invoicer [<month> [<year>]] [options]
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--vendor` | `-v` | Name of the contractor sending the invoice. Required if not set in config. |
-| `--customer` | `-c` | Name of the client receiving the invoice. Required if not set in config. |
-| `--project` | | Name of the project to annotate the invoice with. Optional. |
+| `--customer` | `-c` | Name of the customer receiving the invoice. Required if not set in config. |
+| `--project` | | Project name to store with the invoice. Optional. |
+| `--database` | | Path to the invoice database. Defaults to `~/.invoicer/invoices.db`. |
 | `--rate` | `-r` | Hourly rate in dollars. Required if not set in config. |
-| `--hours` | `-H` | Hours per week worked. Required if not set in config. |
-| `--pdf` | `-p` | Convert the HTML invoice to a PDF file. Defaults to `false`. |
-| `--model` | `-m` | opencode-formatted model stub for invoice generation. Defaults to `deepseek/deepseek-flash`. |
+| `--hours` | `-H` | Hours worked per week. Required if not set in config. |
+| `--version` | | Print the app version and exit. |
 
 ### Examples
 
@@ -50,16 +50,16 @@ invoicer 3 2025
 # Specify all options inline
 invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 150 --hours 40
 
-# Annotate the invoice with a project name
+# Add a project name to the invoice
 invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 150 --hours 40 --project "Website Redesign"
 
-# Generate and convert to PDF
-invoicer -v "Jane Smith" -c "Acme Corp" -r 150 -H 40 --pdf
+# Store the invoice in a different database
+invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 150 --hours 40 --database ./work.db
 ```
 
 ## Config File
 
-Frequently-used options can be stored in `~/.invoicer/config.yaml` to avoid repeating them on every invocation. CLI options always take precedence over config file values.
+Store common options in `~/.invoicer/config.yaml` to avoid repeating them on every run. CLI options always override config file values.
 
 ### Config File Format
 
@@ -68,14 +68,15 @@ vendor: Jane Smith
 customer: Acme Corp
 rate: 150
 hours: 40
-pdf: false
-model: deepseek/deepseek-flash
 project: Website Redesign
+database: ~/.invoicer/invoices.db
 ```
+
+The web app also reads `baseUrl` and `oidc` settings from the same file, as [Access Settings](#access-settings) describes.
 
 ### `set config` Subcommand
 
-Use the `set config` subcommand to write options to the config file without editing it manually. Only the options you specify are updated; others remain unchanged.
+Use the `set config` subcommand to write options to the config file without editing it by hand. The command updates only the options you specify and leaves the others unchanged.
 
 ```
 invoicer set config [options]
@@ -84,14 +85,13 @@ invoicer set config [options]
 | Option | Description |
 |--------|-------------|
 | `--vendor` | Name of the contractor sending the invoice. |
-| `--customer` | Name of the client receiving the invoice. |
-| `--project` | Name of the project to annotate invoices with. |
+| `--customer` | Name of the customer receiving the invoice. |
+| `--project` | Project name to store with invoices. |
+| `--database` | Path to the invoice database. |
 | `--rate` | Hourly rate in dollars. |
-| `--hours` | Hours per week worked. |
-| `--pdf` | Convert the HTML invoice to a PDF file. |
-| `--model` | opencode-formatted model stub for invoice generation. |
+| `--hours` | Hours worked per week. |
 
-The config file and its directory (`~/.invoicer/`) are created automatically if they do not exist.
+Invoicer creates the config file and its directory (`~/.invoicer/`) when they do not exist.
 
 #### Examples
 
@@ -102,41 +102,155 @@ invoicer set config --vendor "Jane Smith" --customer "Acme Corp"
 # Set rate and hours
 invoicer set config --rate 150 --hours 40
 
-# Enable PDF output by default
-invoicer set config --pdf
+# Store the database in a custom location
+invoicer set config --database ./work.db
 ```
 
 ## Invoice Generation
 
-Invoices cover one calendar month and are broken into weekly line items. A week belongs to a month if its **Wednesday** falls in that month. Weeks that span month boundaries are prorated based on the number of working days (Monday–Friday) within the billed month.
+An invoice covers one calendar month and holds weekly line items. The database stores one invoice per month. A week belongs to a month if its **Wednesday** falls in that month. Each week bills the full weekly hours.
 
-The HTML invoice is saved to the current directory as:
-
-```
-invoice-<customer>-<year>-<MM>.html
-```
-
-or, when `--project` is set:
+Generate saves the invoice and its weeks, then reports whether it created or edited the invoice, with the month, year, and identifier:
 
 ```
-invoice-<customer>-<year>-<MM>-<project>.html
+$ invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 150 --hours 40
+Created invoice for October 2026: 3F9K2M8Q1X
 ```
 
-If `--pdf` is set, the HTML is also converted to a PDF at:
+Running generate again for the same year and month edits the stored invoice and prints the same identifier:
 
 ```
-invoice-<customer>-<year>-<MM>.pdf
+$ invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 175 --hours 40
+Edited invoice for October 2026: 3F9K2M8Q1X
 ```
 
-When `--pdf` is set, the HTML invoice is removed after the PDF is successfully generated, leaving only the PDF file.
+Changing the customer or project replaces the stored values and keeps the identifier. A paid invoice blocks generation until an admin user marks it unpaid in the web app.
 
-PDF conversion uses `wkhtmltopdf` if available, falling back to `chromium`, `chromium-browser`, `google-chrome`, or `google-chrome-stable` in headless mode.
+## Web App
+
+`invoicer web` starts a web app for the stored invoices. It lists invoices at `/` and shows each invoice as a full page with a link back to the list. A user downloads an invoice as a PDF from its detail page. A signed-in user can change an invoice's project from its detail page. An admin user can mark the invoice paid or unpaid from that page. A paid invoice blocks project edits.
+
+```
+invoicer web [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--address` | Address the server listens on. Defaults to `:8080`. |
+| `--database` | Path to the invoice database. Defaults to the config value, then `~/.invoicer/invoices.db`. |
+
+The server serves pages and the stylesheet from the binary, so it needs no support files. An interrupt stops the server gracefully. Without access settings in the config, the app starts without sign-in for local development. With access settings, the app needs a configured OpenID Connect provider and requires sign-in.
+
+```bash
+# Serve the default database at http://localhost:8080/
+invoicer web
+
+# Serve a different database on another address
+invoicer web --address 127.0.0.1:9000 --database ./work.db
+```
+
+### Access Settings
+
+Set `baseUrl` and the `oidc` section in the config file:
+
+```yaml
+baseUrl: https://invoices.haralovich.com
+oidc:
+  issuer: https://auth.example.com
+  clientId: invoicer
+  clientSecretFile: /run/secrets/oidc-client-secret
+  cookieKeyFile: /run/secrets/cookie-key
+  adminGroup: invoicer-admins
+  customerGroup: invoicer-customers
+  groupsClaim: groups
+```
+
+`baseUrl` is the public address of the app. `oidc.issuer` is the provider's issuer address. Both must be absolute HTTPS addresses. A loopback address may use HTTP. The callback address is `baseUrl` plus `/callback`.
+
+`oidc.clientId` is required. `oidc.clientSecretFile` names a readable, non-empty file, and `oidc.cookieKeyFile` names a readable file with at least 32 bytes. The app reads both once at startup.
+
+`oidc.adminGroup` defaults to `invoicer-admins`, `oidc.customerGroup` defaults to `invoicer-customers`, and `oidc.groupsClaim` defaults to `groups`.
+
+The app reads the provider's discovery document from `oidc.issuer` at startup. It stops with an error when the issuer is unreachable or the document lacks the authorization, token, or JWKS endpoints.
+
+### Sign-In
+
+Every page requires a session. A request without one goes to `/login`, which sends the browser to the provider's authorization endpoint. The app asks for the `openid`, `email`, `profile`, and `groups` scopes and uses the authorization code flow with PKCE.
+
+The provider returns the browser to `/callback`. The app checks the sign-in state and validates the ID token's issuer, audience, expiry, and nonce. It requires a verified email, then starts a 12 hour session and redirects to the page the user first asked for, or to `/`.
+
+Only a user in the admin group or the customer group may sign in. A user in both groups is an admin user. A failed sign-in sets no session and returns a page that links to try again.
+
+The session does not renew. A missing, expired, or invalid session goes to `/login`. Every page shows the signed-in email and a link to `/logout`, which clears the session and returns the user to `/login`.
+
+## Database
+
+The database path comes from `--database`, then the config file, then the default of `~/.invoicer/invoices.db`. Invoicer creates the database file and its parent directory on first use, then migrates the schema.
+
+## Deployment
+
+The repository holds a container image and a Helm chart under `deploy`.
+
+### Container Image
+
+The image runs `invoicer` as its entrypoint and passes arguments through. `web` serves the web app and no subcommand generates an invoice. The image holds no config, database, or secret.
+
+Build the image with Podman from the repository root:
+
+```bash
+podman build -t ghcr.io/zon/invoicer:0.1.0 --build-arg VERSION=0.1.0 -f deploy/container/Containerfile .
+```
+
+The `VERSION` build argument stamps the app version into the binary. Without it the image reports `dev`.
+
+Push the image to a registry the cluster can reach:
+
+```bash
+podman push ghcr.io/zon/invoicer:0.1.0
+```
+
+### Helm Chart
+
+The chart uses `ghcr.io/zon/invoicer` with the chart app version as the default tag. Override `image.repository` and `image.tag` to deploy another image.
+
+The chart installs into an existing `invoicer` namespace and does not create it. Create the namespace and the OIDC Secret first:
+
+```bash
+kubectl create namespace invoicer
+kubectl -n invoicer create secret generic invoicer-oidc \
+  --from-file=client-secret=./client-secret \
+  --from-file=cookie-key=./cookie-key
+```
+
+The default keys are `client-secret` and `cookie-key`. `access.clientSecretKey` and `access.cookieKeyKey` name other keys.
+
+Then install the chart:
+
+```bash
+helm install invoicer deploy/chart --namespace invoicer \
+  --set hostname=invoices.example.com \
+  --set publicURL=https://invoices.example.com \
+  --set access.issuer=https://id.example.com
+```
+
+Set `hostname` and `publicURL` to the public address and `access` to the OIDC provider. The defaults live in `deploy/chart/values.yaml`. The chart creates the web Deployment, Service, claim, Ingress, and Certificate.
 
 ## Development
 
 ```bash
 just build   # Build the binary to bin/invoicer
+just dev     # Rebuild and restart the web app on changes
 just install # Build and install to $GOPATH/bin
 just test    # Run all tests
+just release # Tag and push the remote main head as the VERSION release
 just         # List available recipes
+```
+
+`just build` stamps the version from git. `invoicer --version` reports the release tag without its `v`, or a version naming the commit after the last tag. Uncommitted changes mark the version dirty.
+
+`just dev` runs the web app through [air](https://github.com/air-verse/air), installed with `go install github.com/air-verse/air@latest`. It uses the address and database `invoicer web` would use. Because the templates and stylesheet are embedded, air watches `html` and `css` files as well as Go files, so an edit to `internal/web/templates` reloads too. Extra arguments are passed to the app:
+
+```bash
+# Reload the web app on another port with a scratch database
+just dev -- --address 127.0.0.1:9000 --database ./tmp/scratch.db
 ```

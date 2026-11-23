@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "invoicer.fullname" . }}
+  labels:
+    {{- include "invoicer.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "invoicer.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "invoicer.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: web
+          image: {{ include "invoicer.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - web
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+          securityContext:
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: config
+              mountPath: /home/invoicer/.invoicer/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: oidc-secrets
+              mountPath: /run/secrets/oidc-client-secret
+              subPath: oidc-client-secret
+              readOnly: true
+            - name: oidc-secrets
+              mountPath: /run/secrets/cookie-key
+              subPath: cookie-key
+              readOnly: true
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "invoicer.fullname" . }}-config
+            defaultMode: 0444
+        - name: oidc-secrets
+          secret:
+            secretName: {{ .Values.access.secretName }}
+            defaultMode: 0444
+            items:
+              - key: {{ .Values.access.clientSecretKey }}
+                path: oidc-client-secret
+              - key: {{ .Values.access.cookieKeyKey }}
+                path: cookie-key
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "invoicer.dataClaimName" . }}

@@ -1,0 +1,65 @@
+{{define "detail.html"}}<!doctype html>
+<html lang="en">
+{{template "head" .}}
+<body>
+  {{template "header" .}}
+  <p class="back"><a href="/">&larr; Back to invoices</a></p>
+  {{with .Invoice}}
+  <section class="invoice-detail">
+    <h2>{{.Customer}} — {{.Month}} {{.Year}}</h2>
+    <p class="pdf-download"><a href="{{.Path}}/pdf">Download PDF</a></p>
+    <dl>
+      <dt>Vendor</dt>
+      <dd>{{.Vendor}}</dd>
+      <dt>Customer</dt>
+      <dd>{{.Customer}}</dd>
+      {{if .Project}}
+      <dt>Project</dt>
+      <dd>{{.Project}}</dd>
+      {{end}}
+      <dt>Month</dt>
+      <dd>{{.Month}}</dd>
+      <dt>Year</dt>
+      <dd>{{.Year}}</dd>
+      <dt>Invoice ID</dt>
+      <dd>{{.ID}}</dd>
+      <dt>Rate</dt>
+      <dd>{{.Rate}}</dd>
+      <dt>Status</dt>
+      <dd>{{.Status}}</dd>
+    </dl>
+    {{if $.Admin}}
+    <form class="paid-status" method="post" action="{{.PaidPath}}">
+      <input type="hidden" name="paid" value="{{if .Paid}}false{{else}}true{{end}}">
+      <button type="submit">{{if .Paid}}Mark unpaid{{else}}Mark paid{{end}}</button>
+    </form>
+    {{end}}
+    {{if not .Paid}}
+    <form class="project-edit" method="post" action="{{.Path}}">
+      <label for="project">Project</label>
+      <input id="project" type="text" name="project" value="{{.Project}}">
+      <button type="submit">Save</button>
+    </form>
+    {{end}}
+    <table class="weeks">
+      <caption>Weekly line items</caption>
+      <thead>
+        <tr>
+          <th>Week</th>
+          <th>Hours</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Weeks}}
+        <tr>
+          <td>{{.Label}}</td>
+          <td>{{.Hours}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    <p class="total">Total: {{.Total}}</p>
+  </section>
+  {{end}}
+</body>
+</html>{{end}}

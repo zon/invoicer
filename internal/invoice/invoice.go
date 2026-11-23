@@ -18,18 +18,23 @@ type Week struct {
 
 // Invoice holds all data needed to generate an invoice for one calendar month.
 type Invoice struct {
+	// ID is the store's identifier for the invoice. It is empty until the
+	// invoice is saved.
+	ID string
 	// Month is the calendar month (1-12).
 	Month time.Month
 	// Year is the calendar year.
 	Year int
 	// Vendor is the name of the contractor sending the invoice.
 	Vendor string
-	// Customer is the name of the client receiving the invoice.
+	// Customer is the name of the customer receiving the invoice.
 	Customer string
 	// Project is the optional name of the project this invoice is for.
 	Project string
 	// Rate is the hourly rate in dollars.
 	Rate float64
+	// Paid reports whether the customer has paid the invoice.
+	Paid bool
 	// Weeks is the list of weekly line items.
 	Weeks []Week
 }
@@ -171,4 +176,19 @@ func absDuration(d time.Duration) time.Duration {
 		return -d
 	}
 	return d
+}
+
+// FormatWeekLabel returns a human-readable label for a week range.
+func FormatWeekLabel(w Week) string {
+	if w.Start.Month() == w.End.Month() {
+		return fmt.Sprintf("%s %d-%d", w.Start.Month().String()[:3], w.Start.Day(), w.End.Day())
+	}
+	return fmt.Sprintf("%s %d - %s %d",
+		w.Start.Month().String()[:3], w.Start.Day(),
+		w.End.Month().String()[:3], w.End.Day())
+}
+
+// Now returns the current time. Exposed as a variable for testing.
+var Now = func() time.Time {
+	return time.Now()
 }
