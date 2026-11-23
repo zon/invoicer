@@ -149,6 +149,26 @@ func TestWorkflowStopsBeforePublishingWhenTestsFail(t *testing.T) {
 	}
 }
 
+func TestPullRequestRunBuildsImageAndLintsChart(t *testing.T) {
+	job := pipelineJob(t, loadWorkflow(t))
+
+	for _, check := range []struct {
+		name  string
+		match func(workflowStep) bool
+	}{
+		{name: "build the image", match: buildsImage},
+		{name: "lint the chart", match: lintsChart},
+	} {
+		index := stepIndexMatching(job.Steps, check.match)
+		if index < 0 {
+			t.Fatalf("workflow does not %s:\n%s", check.name, renderSteps(job.Steps))
+		}
+		if job.If != "" || job.Steps[index].If != "" {
+			t.Fatalf("%s step is conditional, so pull requests skip it", check.name)
+		}
+	}
+}
+
 func TestWorkflowBuildsImageWithPodman(t *testing.T) {
 	workflow := loadWorkflow(t)
 	steps := pipelineSteps(t, workflow)
@@ -278,21 +298,32 @@ func TestWorkflowStopsBeforePublishingWhenScanFails(t *testing.T) {
 	}
 }
 
-// pipelineSteps returns the steps of the job that builds the image.
-func pipelineSteps(t *testing.T, workflow workflow) []workflowStep {
+// pipelineJob returns the job that builds the image.
+func pipelineJob(t *testing.T, workflow workflow) workflowJob {
 	t.Helper()
 	for _, job := range workflow.Jobs {
 		if stepIndexMatching(job.Steps, buildsImage) >= 0 {
-			return job.Steps
+			return job
 		}
 	}
 	t.Fatal("workflow does not build the image with Podman")
-	return nil
+	return workflowJob{}
+}
+
+// pipelineSteps returns the steps of the job that builds the image.
+func pipelineSteps(t *testing.T, workflow workflow) []workflowStep {
+	t.Helper()
+	return pipelineJob(t, workflow).Steps
 }
 
 func buildsImage(step workflowStep) bool {
 	return strings.Contains(step.Run, "podman build") &&
 		strings.Contains(step.Run, filepath.Join("deploy", "container", "Containerfile"))
+}
+
+func lintsChart(step workflowStep) bool {
+	return strings.Contains(step.Run, "helm lint") &&
+		strings.Contains(step.Run, filepath.Join("deploy", "chart"))
 }
 
 func savesImage(step workflowStep) bool {

@@ -24,6 +24,8 @@ jobs:
           go-version-file: go.mod
           cache: true
       - run: go test ./...
+      - name: Lint the chart
+        run: helm lint deploy/chart
       - name: Build the image
         run: podman build --file deploy/container/Containerfile --tag "$IMAGE:ci" .
       - name: Install Trivy
