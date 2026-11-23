@@ -21,7 +21,7 @@ invoicer [<month> [<year>]] [options]
 | Argument | Description |
 |----------|-------------|
 | `month`  | Month to invoice for. Accepts full name (`january`), abbreviation (`jan`), or numeric (`1`–`12`). Defaults to the previous calendar month. |
-| `year`   | Year of the invoice month. Defaults to the year closest to the given month. |
+| `year`   | Year of the invoice month. Defaults to the current year, except when the month is omitted and the previous month is December, which uses the prior year. |
 
 ### Options
 
@@ -125,6 +125,25 @@ Edited invoice for October 2026: 3F9K2M8Q1X
 ```
 
 Changing the customer or project replaces the stored values and keeps the identifier. A paid invoice blocks generation until an admin user marks it unpaid in the web app.
+
+## Removing an Invoice
+
+`invoicer remove` deletes a stored invoice and its weekly line items. Pass the invoice identifier, which accepts uppercase or lowercase:
+
+```
+invoicer remove <id> [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--database` | Path to the invoice database. Defaults to the config value, then `~/.invoicer/invoices.db`. |
+
+```bash
+$ invoicer remove 3F9K2M8Q1X
+Removed invoice for October 2026: 3F9K2M8Q1X
+```
+
+The command removes paid invoices too. An unknown identifier reports an error and removes nothing.
 
 ## Web App
 

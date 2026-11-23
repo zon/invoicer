@@ -71,6 +71,25 @@ The command SHALL fail without tagging when `VERSION` is missing or is not `MAJO
 - WHEN `just release` runs with `VERSION` at `0.2.0`
 - THEN it fails
 
+### Requirement: Automatic Release
+A push to `main` SHALL release the pushed commit when the tag `vVERSION` does not exist on the remote, and SHALL do nothing when it exists.
+
+The release SHALL read `VERSION` from the pushed commit and SHALL use the [release command](#requirement-release-command).
+
+#### Scenario: Unreleased version on main
+- GIVEN `VERSION` holds `0.2.0` at the pushed `main` commit
+- AND the tag `v0.2.0` does not exist on the remote
+- WHEN the push lands
+- THEN the commit is tagged `v0.2.0`
+- AND the build runs on the tag
+
+#### Scenario: Released version on main
+- GIVEN `VERSION` holds `0.2.0` at the pushed `main` commit
+- AND the tag `v0.2.0` exists on the remote
+- WHEN the push lands
+- THEN no tag is created
+- AND no build runs
+
 ### Requirement: Binary Version
 The binary SHALL report its app version from `invoicer --version` and exit successfully.
 
@@ -133,7 +152,21 @@ The chart SHALL have its own SemVer `version`. The version SHALL bump when the c
 
 The chart `appVersion` SHALL be the app version of the image the chart defaults to. An empty `image.tag` SHALL use `appVersion`, as [Chart](chart.md#requirement-values) describes.
 
+An app version bump SHALL set `appVersion` to the new app version and SHALL bump `version`. It SHALL use the new app version for `version` when that is higher, and otherwise bump the chart patch.
+
 A chart-only change SHALL bump `version` and keep `appVersion`.
+
+#### Scenario: App version bump
+- GIVEN a chart `version` of 0.1.0 and `appVersion` of 0.1.0
+- WHEN the app version bumps to 0.1.1
+- THEN the chart `appVersion` is 0.1.1
+- AND the chart `version` is 0.1.1
+
+#### Scenario: App version bump after a chart-only fix
+- GIVEN a chart `version` of 0.1.2 and `appVersion` of 0.1.0
+- WHEN the app version bumps to 0.1.1
+- THEN the chart `appVersion` is 0.1.1
+- AND the chart `version` is 0.1.3
 
 #### Scenario: App release
 - GIVEN a release of app version `0.2.0`

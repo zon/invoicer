@@ -8,7 +8,7 @@ Releases use Semantic Versioning. A release tag is `vMAJOR.MINOR.PATCH` on `main
 
 While the major version is 0, a breaking change bumps minor and every other change bumps patch. From 1.0, the usual SemVer rules apply.
 
-The `VERSION` file at the repo root holds the app version, such as `0.2.0`. The release commit sets `VERSION` and the chart `appVersion`. A release fails when the two differ, so the chart defaults to the released image.
+The `VERSION` file at the repo root holds the app version, such as `0.2.0`. A version bump sets `VERSION` and the chart versions, as [Chart](#chart) describes. A release fails when `VERSION` and the chart `appVersion` differ, so the chart defaults to the released image.
 
 ## Release Command
 
@@ -17,6 +17,10 @@ The `VERSION` file at the repo root holds the app version, such as `0.2.0`. The 
 The command reads the remote commit, not the working tree, so the tag matches the commit it names. Local changes and the current branch do not matter.
 
 The command fails before it tags when `VERSION` is missing or not `MAJOR.MINOR.PATCH`, when the chart `appVersion` differs, or when the tag exists on the remote.
+
+## Automatic Release
+
+A push to `main` releases when `VERSION` names an untagged version. The release workflow reads `VERSION` from the pushed commit and skips when the tag exists on the remote. Otherwise it tags the commit and calls the build, so a version bump releases without a manual step.
 
 ## Binary
 
@@ -36,9 +40,11 @@ There is no `latest` tag. A deployment names an exact tag or digest, so the runn
 
 The chart has its own SemVer `version`. Helm requires a new chart version for every upgrade, so the version bumps whenever the chart changes. It usually matches the app version at an app release and may be ahead after a chart-only fix.
 
+An app version bump sets `appVersion` to the new app version. It raises `version` to the new app version when that is higher, and otherwise bumps the chart patch.
+
 The chart `appVersion` is the app version of the image the chart defaults to. An empty `image.tag` uses it, as [Chart](chart.md) describes. A chart-only fix keeps `appVersion` and defaults to the last released image.
 
-A release publishes the chart package from the tagged commit. A chart-only fix publishes a package from its own commit.
+A release publishes the chart package from the tagged commit. A chart-only fix ships in the next release, because only a tag builds.
 
 ## Artifacts
 

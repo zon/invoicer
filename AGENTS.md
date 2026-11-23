@@ -1,3 +1,7 @@
+## Before a Pull Request
+
+Bump the app version before you submit a pull request. Judge the SemVer component from the change, as [Release](docs/design/release.md) describes. Set `VERSION` and the chart `appVersion` to the new version, and bump the chart `version` in `deploy/chart/Chart.yaml`.
+
 ## Zpecs
 
 * [Milestones](docs/milestones.md) - High level objectives

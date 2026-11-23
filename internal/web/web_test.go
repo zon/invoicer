@@ -1370,6 +1370,42 @@ func TestDetailReturnsNotFound(t *testing.T) {
 	}
 }
 
+func TestMissingInvoiceShowsNotFoundPage(t *testing.T) {
+	stored := &invoice.Invoice{
+		Month:    time.October,
+		Year:     2027,
+		Customer: "Acme Corp",
+		Rate:     100,
+	}
+
+	for _, path := range []string{
+		"/2026/oct",
+		"/2027/foo",
+		"/not-a-year/oct",
+		"/2026/oct/pdf",
+	} {
+		t.Run(path, func(t *testing.T) {
+			recorder := get(t, &fakeStore{invoices: []*invoice.Invoice{stored}}, path)
+
+			if recorder.Code != http.StatusNotFound {
+				t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusNotFound)
+			}
+			if contentType := recorder.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "text/html") {
+				t.Errorf("content type: got %q, want HTML", contentType)
+			}
+			body := recorder.Body.String()
+			for _, want := range []string{"<!doctype html>", "Not found", `href="/"`} {
+				if !strings.Contains(body, want) {
+					t.Errorf("404 page does not contain %q:\n%s", want, body)
+				}
+			}
+			if strings.Contains(body, stored.Customer) {
+				t.Errorf("404 page shows invoice %q", stored.Customer)
+			}
+		})
+	}
+}
+
 func TestListLinksToDetailPages(t *testing.T) {
 	recorder := get(t, &fakeStore{invoices: []*invoice.Invoice{{
 		Month:    time.October,

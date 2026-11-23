@@ -34,10 +34,11 @@ type workflowJob struct {
 }
 
 type workflowStep struct {
-	Uses            string `yaml:"uses"`
-	Run             string `yaml:"run"`
-	If              string `yaml:"if"`
-	ContinueOnError bool   `yaml:"continue-on-error"`
+	Uses            string            `yaml:"uses"`
+	Run             string            `yaml:"run"`
+	If              string            `yaml:"if"`
+	Env             map[string]string `yaml:"env"`
+	ContinueOnError bool              `yaml:"continue-on-error"`
 }
 
 type pushTrigger struct {
@@ -60,27 +61,24 @@ func loadWorkflow(t *testing.T) workflow {
 	return parsed
 }
 
-func TestWorkflowRunsOnPullRequests(t *testing.T) {
+func TestWorkflowRunsOnlyOnVersionTags(t *testing.T) {
 	workflow := loadWorkflow(t)
-
-	if _, ok := workflow.On["pull_request"]; !ok {
-		t.Fatal("workflow does not run on pull requests")
-	}
-}
-
-func TestWorkflowRunsOnMainPushes(t *testing.T) {
-	push := pushTriggerOf(t, loadWorkflow(t))
-
-	if !slices.Contains(push.Branches, "main") {
-		t.Fatalf("workflow push branches: got %v, want main", push.Branches)
-	}
-}
-
-func TestWorkflowRunsOnVersionTags(t *testing.T) {
-	push := pushTriggerOf(t, loadWorkflow(t))
+	push := pushTriggerOf(t, workflow)
 
 	if !slices.Contains(push.Tags, "v*") {
 		t.Fatalf("workflow push tags: got %v, want v*", push.Tags)
+	}
+	if len(push.Branches) != 0 {
+		t.Fatalf("workflow push branches: got %v, want none", push.Branches)
+	}
+	if _, ok := workflow.On["pull_request"]; ok {
+		t.Fatal("workflow runs on pull requests, want only version tags")
+	}
+}
+
+func TestWorkflowRunsFromTheReleaseWorkflow(t *testing.T) {
+	if _, ok := loadWorkflow(t).On["workflow_call"]; !ok {
+		t.Fatal("workflow is not callable by the release workflow")
 	}
 }
 
@@ -96,19 +94,6 @@ func pushTriggerOf(t *testing.T, workflow workflow) pushTrigger {
 		t.Fatal(err)
 	}
 	return push
-}
-
-func TestPullRequestRunPublishesNothing(t *testing.T) {
-	for jobName, job := range loadWorkflow(t).Jobs {
-		for _, step := range job.Steps {
-			if !isPublishing(step) {
-				continue
-			}
-			if step.If == "" && job.If == "" {
-				t.Fatalf("job %s publishes unconditionally", jobName)
-			}
-		}
-	}
 }
 
 func TestWorkflowRunsTests(t *testing.T) {
@@ -150,7 +135,7 @@ func TestWorkflowStopsBeforePublishingWhenTestsFail(t *testing.T) {
 	}
 }
 
-func TestPullRequestRunBuildsImageAndLintsChart(t *testing.T) {
+func TestWorkflowBuildsImageAndLintsChart(t *testing.T) {
 	job := pipelineJob(t, loadWorkflow(t))
 
 	for _, check := range []struct {
@@ -165,7 +150,7 @@ func TestPullRequestRunBuildsImageAndLintsChart(t *testing.T) {
 			t.Fatalf("workflow does not %s:\n%s", check.name, renderSteps(job.Steps))
 		}
 		if job.If != "" || job.Steps[index].If != "" {
-			t.Fatalf("%s step is conditional, so pull requests skip it", check.name)
+			t.Fatalf("%s step is conditional, so the build skips it", check.name)
 		}
 	}
 }
@@ -299,53 +284,48 @@ func TestWorkflowStopsBeforePublishingWhenScanFails(t *testing.T) {
 	}
 }
 
-func TestWorkflowPublishesMainPushToRegistry(t *testing.T) {
-	workflow := loadWorkflow(t)
-	steps := pipelineSteps(t, workflow)
+func TestWorkflowSetsTheAppVersion(t *testing.T) {
+	steps := pipelineSteps(t, loadWorkflow(t))
 
-	publish := stepIndexMatching(steps, isPublishing)
-	if publish < 0 {
-		t.Fatalf("workflow does not publish the image:\n%s", renderSteps(steps))
+	index := stepIndexMatching(steps, setsAppVersion)
+	if index < 0 {
+		t.Fatalf("workflow does not set APP_VERSION:\n%s", renderSteps(steps))
 	}
-	step := steps[publish]
-	if !strings.Contains(step.If, "github.event_name == 'push'") || !strings.Contains(step.If, "refs/heads/main") {
-		t.Fatalf("publish step does not run only on main pushes: %q", step.If)
+	run := steps[index].Run
+	if input := steps[index].Env["INPUT_VERSION"]; !strings.Contains(input, "inputs.version") {
+		t.Fatalf("version step does not read the release version, got %q", input)
 	}
-	if image := workflow.Env["IMAGE"]; image != "ghcr.io/zon/invoicer" {
-		t.Fatalf("workflow publishes to %q, want ghcr.io/zon/invoicer", image)
+	if !strings.Contains(run, "INPUT_VERSION") {
+		t.Fatalf("version step does not use the release version:\n%s", run)
 	}
-	if !referencesImage(step.Run) {
-		t.Fatalf("publish step does not use the workflow IMAGE:\n%s", step.Run)
-	}
-	if !strings.Contains(step.Run, "sha-") || !strings.Contains(step.Run, "GITHUB_SHA") {
-		t.Fatalf("publish step does not tag the image with the short commit:\n%s", step.Run)
+	if !strings.Contains(run, "scripts/version.sh") {
+		t.Fatalf("version step does not fall back to the tag version:\n%s", run)
 	}
 
-	build := stepIndexMatching(steps, buildsImage)
-	if build < 0 {
-		t.Fatal("workflow does not build the image")
-	}
-	if tag := builtImageTag(steps[build].Run); !strings.Contains(step.Run, tag) {
-		t.Fatalf("publish step does not use the built image %s:\n%s", tag, step.Run)
+	for _, match := range []func(workflowStep) bool{buildsImage, checksChartAppVersion, isReleaseImagePublishStep} {
+		step := stepIndexMatching(steps, match)
+		if step < 0 || step < index {
+			t.Fatalf("step at %d uses the app version before the version step at %d", step, index)
+		}
 	}
 }
 
-func TestWorkflowTagBuildPublishesVersionTag(t *testing.T) {
+func TestWorkflowPublishesTheReleaseImage(t *testing.T) {
 	steps := pipelineSteps(t, loadWorkflow(t))
 
-	publish := stepIndexMatching(steps, isTagImagePublishStep)
+	publish := stepIndexMatching(steps, isReleaseImagePublishStep)
 	if publish < 0 {
 		t.Fatalf("workflow does not publish the release image:\n%s", renderSteps(steps))
 	}
 	step := steps[publish]
-	if !strings.Contains(step.If, "refs/tags/") {
-		t.Fatalf("release image publish does not run only on tag builds: %q", step.If)
+	if step.If != "" {
+		t.Fatalf("release image publish is conditional: %q", step.If)
 	}
 	if !referencesImage(step.Run) {
 		t.Fatalf("release image publish does not use the workflow IMAGE:\n%s", step.Run)
 	}
-	if !strings.Contains(step.Run, "scripts/version.sh") {
-		t.Fatalf("release image publish does not use the app version from git:\n%s", step.Run)
+	if !usesAppVersion(step.Run) {
+		t.Fatalf("release image publish does not use the app version:\n%s", step.Run)
 	}
 	if !strings.Contains(step.Run, "GITHUB_SHA") {
 		t.Fatalf("release image publish does not use the commit:\n%s", step.Run)
@@ -360,24 +340,20 @@ func TestWorkflowTagBuildPublishesVersionTag(t *testing.T) {
 	}
 }
 
-func TestWorkflowLogsInForTagBuildPublish(t *testing.T) {
+func TestWorkflowLogsInForPublish(t *testing.T) {
 	steps := pipelineSteps(t, loadWorkflow(t))
 
 	login := stepIndexMatching(steps, logsInToRegistry)
-	publish := stepIndexMatching(steps, isTagImagePublishStep)
+	publish := stepIndexMatching(steps, isReleaseImagePublishStep)
 	if login < 0 || publish < 0 || login > publish {
 		t.Fatalf("workflow logs in to the registry at %d but publishes the release at %d", login, publish)
 	}
-	condition := steps[login].If
-	if !strings.Contains(condition, "github.event_name == 'push'") {
-		t.Fatalf("registry login does not run on tag pushes: %q", condition)
-	}
-	if strings.Contains(condition, "refs/heads/main") && !strings.Contains(condition, "refs/tags/") {
-		t.Fatalf("registry login is limited to main pushes: %q", condition)
+	if steps[login].If != "" {
+		t.Fatalf("registry login is conditional: %q", steps[login].If)
 	}
 }
 
-func TestWorkflowChecksTagBuildChartAppVersion(t *testing.T) {
+func TestWorkflowChecksChartAppVersion(t *testing.T) {
 	steps := pipelineSteps(t, loadWorkflow(t))
 
 	check := stepIndexMatching(steps, checksChartAppVersion)
@@ -385,14 +361,11 @@ func TestWorkflowChecksTagBuildChartAppVersion(t *testing.T) {
 		t.Fatalf("workflow does not check the chart app version:\n%s", renderSteps(steps))
 	}
 	step := steps[check]
-	if !strings.Contains(step.If, "refs/tags/") {
-		t.Fatalf("chart app version check does not run only on tag builds: %q", step.If)
-	}
 	if !strings.Contains(step.Run, filepath.Join("deploy", "chart")) {
 		t.Fatalf("chart app version check does not use deploy/chart:\n%s", step.Run)
 	}
-	if !strings.Contains(step.Run, "scripts/version.sh") {
-		t.Fatalf("chart app version check does not use the app version from git:\n%s", step.Run)
+	if !usesAppVersion(step.Run) {
+		t.Fatalf("chart app version check does not use the app version:\n%s", step.Run)
 	}
 
 	for index, other := range steps {
@@ -413,16 +386,16 @@ func TestWorkflowStampsAppVersionIntoImage(t *testing.T) {
 	if version == "" {
 		t.Fatalf("image build does not stamp the app version:\n%s", steps[build].Run)
 	}
-	if !strings.Contains(version, "scripts/version.sh") {
-		t.Fatalf("image build VERSION %q does not come from scripts/version.sh", version)
+	if !usesAppVersion(version) {
+		t.Fatalf("image build VERSION %q does not come from APP_VERSION", version)
 	}
 
-	publish := stepIndexMatching(steps, isTagImagePublishStep)
+	publish := stepIndexMatching(steps, isReleaseImagePublishStep)
 	if publish < 0 {
 		t.Fatalf("workflow does not publish the release image:\n%s", renderSteps(steps))
 	}
-	if !strings.Contains(steps[publish].Run, "scripts/version.sh") {
-		t.Fatalf("release image publish does not use the same git version:\n%s", steps[publish].Run)
+	if !usesAppVersion(steps[publish].Run) {
+		t.Fatalf("release image publish does not use the same app version:\n%s", steps[publish].Run)
 	}
 }
 
@@ -439,7 +412,7 @@ func TestWorkflowLabelsTheImage(t *testing.T) {
 		key  string
 		uses []string
 	}{
-		{key: "org.opencontainers.image.version", uses: []string{"scripts/version.sh"}},
+		{key: "org.opencontainers.image.version", uses: []string{"APP_VERSION"}},
 		{key: "org.opencontainers.image.revision", uses: []string{"GITHUB_SHA"}},
 		{key: "org.opencontainers.image.source", uses: []string{"GITHUB_SERVER_URL", "GITHUB_REPOSITORY"}},
 		{key: "org.opencontainers.image.created", uses: []string{"date -u", "%Y-%m-%dT%H:%M:%SZ"}},
@@ -480,9 +453,6 @@ func TestWorkflowPublishesTheChart(t *testing.T) {
 	if !strings.Contains(step.Run, "oci://ghcr.io/zon/charts") {
 		t.Fatalf("chart publish does not use oci://ghcr.io/zon/charts:\n%s", step.Run)
 	}
-	if !strings.Contains(step.If, "github.event_name == 'push'") {
-		t.Fatalf("chart publish does not run only on pushes: %q", step.If)
-	}
 }
 
 func TestWorkflowLogsInToChartRegistry(t *testing.T) {
@@ -494,9 +464,6 @@ func TestWorkflowLogsInToChartRegistry(t *testing.T) {
 	}
 	if !strings.Contains(steps[login].Run, "secrets.GITHUB_TOKEN") {
 		t.Fatalf("chart registry login does not use the workflow GITHUB_TOKEN:\n%s", steps[login].Run)
-	}
-	if !strings.Contains(steps[login].If, "github.event_name == 'push'") {
-		t.Fatalf("chart registry login does not run only on pushes: %q", steps[login].If)
 	}
 
 	publish := stepIndexMatching(steps, publishesChart)
@@ -577,8 +544,17 @@ func checksChartAppVersion(step workflowStep) bool {
 	return strings.Contains(step.Run, filepath.Join("scripts", "check-chart-app-version.sh"))
 }
 
-func isTagImagePublishStep(step workflowStep) bool {
+func isReleaseImagePublishStep(step workflowStep) bool {
 	return strings.Contains(step.Run, filepath.Join("scripts", "publish-image.sh"))
+}
+
+func setsAppVersion(step workflowStep) bool {
+	return strings.Contains(step.Run, "APP_VERSION=") &&
+		strings.Contains(step.Run, "GITHUB_ENV")
+}
+
+func usesAppVersion(run string) bool {
+	return strings.Contains(run, "$APP_VERSION") || strings.Contains(run, "${APP_VERSION}")
 }
 
 func logsInToChartRegistry(step workflowStep) bool {

@@ -127,14 +127,16 @@ func equalFold(a, b string) bool {
 
 // ResolveMonthYear resolves the month and year to use for an invoice.
 // If monthStr is empty, defaults to the previous month.
-// If year is 0, defaults to the year closest to the given month relative to today.
+// If year is 0, defaults to the current year, unless the month is omitted and
+// the previous month falls in the prior year.
 func ResolveMonthYear(monthStr string, year int, now time.Time) (time.Month, int, error) {
 	var month time.Month
 	var err error
 
 	if monthStr == "" {
-		// Default to previous month.
-		prev := now.AddDate(0, -1, 0)
+		// Default to previous month. Truncate to the first of the month so that
+		// a short previous month does not spill into the wrong month.
+		prev := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).AddDate(0, -1, 0)
 		month = prev.Month()
 		if year == 0 {
 			year = prev.Year()
@@ -145,37 +147,11 @@ func ResolveMonthYear(monthStr string, year int, now time.Time) (time.Month, int
 			return 0, 0, err
 		}
 		if year == 0 {
-			// Choose the year closest to today for the given month.
-			year = closestYear(month, now)
+			year = now.Year()
 		}
 	}
 
 	return month, year, nil
-}
-
-// closestYear returns the year such that the given month is closest to now.
-// It considers the current year, previous year, and next year.
-func closestYear(month time.Month, now time.Time) int {
-	best := now.Year()
-	bestDiff := absDuration(now.Sub(time.Date(best, month, 1, 0, 0, 0, 0, time.UTC)))
-
-	for _, y := range []int{now.Year() - 1, now.Year() + 1} {
-		candidate := time.Date(y, month, 1, 0, 0, 0, 0, time.UTC)
-		diff := absDuration(now.Sub(candidate))
-		if diff < bestDiff {
-			bestDiff = diff
-			best = y
-		}
-	}
-
-	return best
-}
-
-func absDuration(d time.Duration) time.Duration {
-	if d < 0 {
-		return -d
-	}
-	return d
 }
 
 // FormatWeekLabel returns a human-readable label for a week range.

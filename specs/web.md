@@ -56,12 +56,13 @@ The detail SHALL be a full page. It SHALL show only the invoice and SHALL link b
 - AND the detail shows no project form
 
 ### Requirement: Missing Invoice
-The app SHALL return 404 for an unknown year, an unknown month, or a month with no stored invoice.
+The app SHALL return 404 for an unknown year, an unknown month, or a month with no stored invoice. The 404 response SHALL be a complete HTML page that says the invoice was not found and links back to the invoice list.
 
 #### Scenario: Month has no invoice
 - GIVEN no stored invoice for October 2027
 - WHEN `/2027/oct` is requested
 - THEN the app returns 404
+- AND the response is an HTML page that links to the invoice list
 
 #### Scenario: Invalid month
 - GIVEN the address `/2027/foo`

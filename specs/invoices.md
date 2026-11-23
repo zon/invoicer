@@ -104,6 +104,8 @@ Generating an invoice SHALL save it and print whether the invoice was created or
 
 Generate SHALL default to the previous calendar month in UTC.
 
+A given month without a year SHALL use the current UTC year. Omitting the month SHALL use the year of the previous calendar month, so January defaults to December of the prior year.
+
 When the stored invoice for the month is paid, generate SHALL report that the invoice is paid, store nothing, and exit non-zero.
 
 #### Scenario: Successful generation
@@ -116,6 +118,16 @@ When the stored invoice for the month is paid, generate SHALL report that the in
 - GIVEN no month or year
 - WHEN generate runs on 1 April 2026
 - THEN it generates the invoice for March 2026
+
+#### Scenario: Given month without a year
+- GIVEN a month but no year
+- WHEN generate runs for November on 15 March 2026
+- THEN it generates the invoice for November 2026
+
+#### Scenario: January defaults to the prior December
+- GIVEN no month or year
+- WHEN generate runs on 1 January 2026
+- THEN it generates the invoice for December 2025
 
 #### Scenario: Paid invoice blocks generate
 - GIVEN a stored paid invoice
@@ -134,3 +146,31 @@ When the stored invoice for the month is paid, generate SHALL report that the in
 - WHEN an invoice is generated
 - THEN generate reports an error
 - AND generate stores no invoice
+
+### Requirement: Invoice Removal
+The system SHALL delete a stored invoice and its weekly line items when remove receives the invoice's identifier. Remove SHALL accept the identifier in either case. Remove SHALL delete a paid invoice as well as an unpaid one.
+
+Remove SHALL report an error and exit non-zero when no invoice has the identifier, and SHALL delete nothing.
+
+#### Scenario: Stored invoice is removed
+- GIVEN a stored invoice
+- WHEN remove receives its identifier
+- THEN the invoice and its weekly line items are deleted
+- AND the output reports the invoice's month, year, and identifier
+
+#### Scenario: Identifier case does not matter
+- GIVEN a stored invoice whose identifier is lowercase
+- WHEN remove receives the identifier in uppercase
+- THEN the invoice is deleted
+
+#### Scenario: Paid invoice is removed
+- GIVEN a stored paid invoice
+- WHEN remove receives its identifier
+- THEN the invoice is deleted
+
+#### Scenario: Unknown identifier removes nothing
+- GIVEN stored invoices
+- WHEN remove receives an identifier that no invoice has
+- THEN remove reports an error
+- AND no invoice is deleted
+- AND the command exits non-zero
