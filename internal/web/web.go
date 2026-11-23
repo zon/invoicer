@@ -124,6 +124,7 @@ type invoiceRow struct {
 }
 
 type invoiceDetail struct {
+	ID       string
 	Vendor   string
 	Customer string
 	Project  string
@@ -376,6 +377,7 @@ func detail(inv *invoice.Invoice) *invoiceDetail {
 		return nil
 	}
 	return &invoiceDetail{
+		ID:       strings.ToUpper(inv.ID),
 		Vendor:   inv.Vendor,
 		Customer: inv.Customer,
 		Project:  inv.Project,

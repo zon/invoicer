@@ -113,14 +113,14 @@ Generate saves the invoice and its weeks, then reports whether it created or edi
 
 ```
 $ invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 150 --hours 40
-Created invoice for October 2026: 2f8c1a9b5d3e4f6a7c8b9d0e1f2a3b4c
+Created invoice for October 2026: 3F9K2M8Q1X
 ```
 
 Running generate again for the same year and month edits the stored invoice and prints the same identifier:
 
 ```
 $ invoicer --vendor "Jane Smith" --customer "Acme Corp" --rate 175 --hours 40
-Edited invoice for October 2026: 2f8c1a9b5d3e4f6a7c8b9d0e1f2a3b4c
+Edited invoice for October 2026: 3F9K2M8Q1X
 ```
 
 Changing the customer or project replaces the stored values and keeps the identifier. A paid invoice blocks generation until an admin user marks it unpaid in the web app.

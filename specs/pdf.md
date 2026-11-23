@@ -6,14 +6,14 @@ The web app renders a stored invoice as a downloadable PDF from its stored data.
 ## Requirements
 
 ### Requirement: Invoice PDF
-The PDF SHALL show the same data as the invoice detail: vendor, customer, project when set, month and year, hourly rate, every weekly line item, and total. The PDF SHALL NOT show the paid status or a paid marker. Each weekly line item SHALL show its date range and hours. The total SHALL follow [Invoice Amount](invoices.md#requirement-invoice-amount).
+The PDF SHALL show the same data as the invoice detail: vendor, customer, project when set, month and year, invoice identifier, hourly rate, every weekly line item, and total. The PDF SHALL NOT show the paid status or a paid marker. Each weekly line item SHALL show its date range and hours. The total SHALL follow [Invoice Amount](invoices.md#requirement-invoice-amount).
 
 The PDF SHALL use A4 portrait pages and SHALL contain no form, no link, and no other invoice. A stored value SHALL render as text and never as markup. A long value SHALL wrap and SHALL stay inside the page.
 
 #### Scenario: PDF shows the stored invoice
 - GIVEN a stored invoice for October 2027 with a vendor, customer, project, rate, and weekly hours
 - WHEN its PDF is requested
-- THEN the PDF shows the vendor, customer, project, month, year, rate, each week's date range and hours, and total
+- THEN the PDF shows the vendor, customer, project, month, year, invoice identifier, rate, each week's date range and hours, and total
 - AND the PDF shows no other invoice
 
 #### Scenario: Total follows stored data

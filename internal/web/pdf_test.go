@@ -72,6 +72,7 @@ func TestInvoicePDFShowsStoredInvoice(t *testing.T) {
 		"Website",
 		"October",
 		"2027",
+		"Invoice ID: 3F9K2M8Q1X",
 		"$100.00",
 		"Weekly line items",
 		"Oct 4-10",
@@ -287,6 +288,7 @@ func TestInvoicePDFFlowsOntoMorePages(t *testing.T) {
 
 func testInvoice() *invoice.Invoice {
 	return &invoice.Invoice{
+		ID:       "3f9k2m8q1x",
 		Month:    time.October,
 		Year:     2027,
 		Vendor:   "Jane Doe",

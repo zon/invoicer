@@ -86,6 +86,9 @@ func TestSaveStoresInvoiceAndWeeks(t *testing.T) {
 		t.Fatalf("Get: %v", err)
 	}
 
+	if got.ID != id {
+		t.Errorf("ID: got %q, want %q", got.ID, id)
+	}
 	if got.Month != inv.Month {
 		t.Errorf("Month: got %v, want %v", got.Month, inv.Month)
 	}
@@ -116,6 +119,23 @@ func TestSaveStoresInvoiceAndWeeks(t *testing.T) {
 		}
 		if got.Weeks[i].Hours != inv.Weeks[i].Hours {
 			t.Errorf("Week %d Hours: got %v, want %v", i, got.Weeks[i].Hours, inv.Weeks[i].Hours)
+		}
+	}
+}
+
+func TestSaveAssignsBase36Identifier(t *testing.T) {
+	s, _ := openTempStore(t)
+
+	id, _, err := s.Save(testInvoice())
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if len(id) != 10 {
+		t.Errorf("identifier length: got %d (%q), want 10", len(id), id)
+	}
+	for _, r := range id {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'z') {
+			t.Errorf("identifier %q contains %q, want lowercase base 36", id, r)
 		}
 	}
 }

@@ -25,7 +25,7 @@ Saving an invoice and its weeks SHALL be one transaction. A failed save SHALL le
 - THEN the previously stored invoice and its weeks remain unchanged
 
 ### Requirement: Invoice Identity
-The store SHALL assign an opaque string identifier to an invoice when it first saves the invoice. The identifier SHALL never change.
+The store SHALL assign an opaque string identifier to an invoice when it first saves the invoice. The store SHALL keep the identifier in lowercase, and every display of the identifier SHALL use uppercase. The identifier SHALL never change.
 
 A year and month SHALL identify an invoice. The database SHALL hold at most one invoice per year and month. Saving an invoice for an existing year and month SHALL replace the stored values and weekly line items, and SHALL keep the identifier. The new customer and project SHALL replace the stored customer and project. A paid invoice SHALL NOT be replaced. A save for a paid month SHALL fail and leave the stored invoice unchanged.
 
@@ -34,6 +34,12 @@ A year and month SHALL identify an invoice. The database SHALL hold at most one 
 - WHEN the store saves an invoice
 - THEN the store assigns an identifier
 - AND the store returns the identifier to the caller
+
+#### Scenario: Identifier displays in uppercase
+- GIVEN a stored invoice whose identifier is lowercase
+- WHEN generate prints the identifier, the detail page shows it, or the PDF renders it
+- THEN the identifier appears in uppercase
+- AND the stored identifier stays lowercase
 
 #### Scenario: Saving the same invoice replaces it
 - GIVEN a stored unpaid invoice

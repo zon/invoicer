@@ -12,7 +12,7 @@ Selecting an invoice opens its detail page.
 
 ## Invoice Detail
 
-The invoice detail uses the year and month, like `/2027/oct`. The month uses its three-letter lowercase name. The detail shows the vendor, customer, project, month, year, hourly rate, weekly line items, paid status, and total. Each weekly line item shows its date range and hours. The project is editable while the invoice is unpaid, as [Project Edits](project-edits.md) describes. A paid invoice shows no project form. An admin user changes the paid status, as [Paid Status](paid-status.md) describes.
+The invoice detail uses the year and month, like `/2027/oct`. The month uses its three-letter lowercase name. The detail shows the vendor, customer, project, month, year, invoice identifier, hourly rate, weekly line items, paid status, and total. Each weekly line item shows its date range and hours. The project is editable while the invoice is unpaid, as [Project Edits](project-edits.md) describes. A paid invoice shows no project form. An admin user changes the paid status, as [Paid Status](paid-status.md) describes.
 
 The detail is a full page. It shows only that invoice and links back to the invoice list. It links to the invoice PDF, as [PDF](pdf.md) describes. A direct request to an invoice detail URL returns the complete page.
 

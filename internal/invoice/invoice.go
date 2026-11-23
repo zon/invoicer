@@ -18,6 +18,9 @@ type Week struct {
 
 // Invoice holds all data needed to generate an invoice for one calendar month.
 type Invoice struct {
+	// ID is the store's identifier for the invoice. It is empty until the
+	// invoice is saved.
+	ID string
 	// Month is the calendar month (1-12).
 	Month time.Month
 	// Year is the calendar year.

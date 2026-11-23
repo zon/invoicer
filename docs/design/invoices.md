@@ -16,7 +16,7 @@ An invoice records one customer's work for one calendar month:
 
 An invoice holds data only. Rendering is separate. The [web app](web.md) renders the invoice as HTML and downloads it as a [PDF](pdf.md).
 
-The store assigns an opaque string identifier when it first saves an invoice. The identifier never changes.
+The store assigns an opaque string identifier when it first saves an invoice. It keeps the identifier in lowercase and displays it in uppercase. The identifier never changes.
 
 A week line item records its start date, end date, and hours. Weeks belong to their invoice. The invoice total is the sum of each week's hours times the invoice rate. The system computes the total from stored data and never stores it.
 

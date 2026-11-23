@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/zon/invoicer/internal/config"
 	"github.com/zon/invoicer/internal/invoice"
@@ -207,6 +208,6 @@ func (c *GenerateCmd) run(configPath string, out io.Writer) error {
 	if created {
 		action = "Created"
 	}
-	fmt.Fprintf(out, "%s invoice for %s %d: %s\n", action, month.String(), year, id)
+	fmt.Fprintf(out, "%s invoice for %s %d: %s\n", action, month.String(), year, strings.ToUpper(id))
 	return nil
 }

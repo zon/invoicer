@@ -26,7 +26,7 @@ The total SHALL follow [Invoice Amount](invoices.md#requirement-invoice-amount).
 - THEN the page shows an empty list
 
 ### Requirement: Invoice Detail
-The detail address SHALL use the year and three-letter lowercase month name, like `/2027/oct`. The detail SHALL show vendor, customer, project when set, month, year, hourly rate, every weekly line item, paid status, and total. Each weekly line item SHALL show its date range and hours. The detail SHALL show the project edit form while the invoice is unpaid, as [Project Edits](project-edits.md#requirement-project-edit-form) describes, and the paid status form for an admin user, as [Paid Status](paid-status.md#requirement-paid-status-update) describes.
+The detail address SHALL use the year and three-letter lowercase month name, like `/2027/oct`. The detail SHALL show vendor, customer, project when set, month, year, invoice identifier, hourly rate, every weekly line item, paid status, and total. Each weekly line item SHALL show its date range and hours. The detail SHALL show the project edit form while the invoice is unpaid, as [Project Edits](project-edits.md#requirement-project-edit-form) describes, and the paid status form for an admin user, as [Paid Status](paid-status.md#requirement-paid-status-update) describes.
 
 The detail SHALL be a full page. It SHALL show only the invoice and SHALL link back to the invoice list. It SHALL link to the invoice PDF at the detail address plus `/pdf`, as [PDF](pdf.md) describes.
 
@@ -37,7 +37,7 @@ The detail SHALL be a full page. It SHALL show only the invoice and SHALL link b
 - AND the page shows no other invoice
 - AND the page links back to the invoice list
 - AND the page links to `/2027/oct/pdf`
-- AND the detail shows vendor, customer, project, month, year, rate, each week's date range and hours, paid status, and total
+- AND the detail shows vendor, customer, project, month, year, invoice identifier, rate, each week's date range and hours, paid status, and total
 
 #### Scenario: Returning to the list
 - GIVEN the detail page for October 2027 is open

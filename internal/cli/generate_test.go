@@ -47,6 +47,9 @@ func TestGenerateSavesInvoiceAndPrintsIdentifier(t *testing.T) {
 		t.Errorf("output: got %q, want created invoice with month, year, and identifier", out.String())
 	}
 	id := outputID(t, out.String())
+	if id != strings.ToUpper(id) {
+		t.Errorf("identifier is not uppercase: %q", id)
+	}
 
 	s, err := store.Open(dbPath)
 	if err != nil {
@@ -54,7 +57,7 @@ func TestGenerateSavesInvoiceAndPrintsIdentifier(t *testing.T) {
 	}
 	defer s.Close()
 
-	got, err := s.Get(id)
+	got, err := s.Get(strings.ToLower(id))
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -151,7 +154,7 @@ func TestGenerateReusesIdentifierForSameInvoice(t *testing.T) {
 	}
 	defer s.Close()
 
-	got, err := s.Get(firstID)
+	got, err := s.Get(strings.ToLower(firstID))
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}

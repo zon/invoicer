@@ -3,11 +3,12 @@ package store
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gorm.io/driver/sqlite"
@@ -334,6 +335,7 @@ func updateColumn(db *gorm.DB, year int, month time.Month, column string, value 
 
 func toInvoice(record *Invoice) *invoice.Invoice {
 	inv := &invoice.Invoice{
+		ID:       record.ID,
 		Month:    time.Month(record.Month),
 		Year:     record.Year,
 		Vendor:   record.Vendor,
@@ -353,10 +355,15 @@ func toInvoice(record *Invoice) *invoice.Invoice {
 	return inv
 }
 
+// idLength is the fixed number of base 36 digits in a new invoice identifier.
+const idLength = 10
+
+// newID returns a random 48-bit number as ten lowercase base 36 digits.
 func newID() (string, error) {
-	var b [16]byte
+	var b [6]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		return "", fmt.Errorf("generating invoice identifier: %w", err)
 	}
-	return hex.EncodeToString(b[:]), nil
+	id := new(big.Int).SetBytes(b[:]).Text(36)
+	return strings.Repeat("0", idLength-len(id)) + id, nil
 }

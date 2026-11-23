@@ -560,6 +560,7 @@ func TestListReportsStoreError(t *testing.T) {
 
 func TestDetailShowsFullPageWithBackLink(t *testing.T) {
 	selected := &invoice.Invoice{
+		ID:       "3f9k2m8q1x",
 		Month:    time.October,
 		Year:     2027,
 		Vendor:   "Jane Smith",
@@ -609,6 +610,7 @@ func TestDetailShowsFullPageWithBackLink(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Jane Smith", "Acme Corp", "Website Redesign", "October", "2027", "$100.00",
+		"Invoice ID", "3F9K2M8Q1X",
 		"Oct 4-10", "40", "Oct 11-17", "32", "$7200.00",
 	} {
 		if !strings.Contains(body, want) {

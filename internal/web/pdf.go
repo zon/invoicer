@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/signintech/gopdf"
 
@@ -92,6 +93,7 @@ func (w *pdfWriter) invoice(inv *invoice.Invoice) {
 	}
 	w.field("Month", inv.Month.String())
 	w.field("Year", strconv.Itoa(inv.Year))
+	w.field("Invoice ID", strings.ToUpper(inv.ID))
 	w.field("Hourly rate", fmt.Sprintf("$%.2f", inv.Rate))
 	w.gap()
 	w.write("Weekly line items", pdfSectionSize, pdfSectionHeight)
