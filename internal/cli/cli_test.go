@@ -977,3 +977,166 @@ func TestWebRunReportsUnavailableAddress(t *testing.T) {
 		t.Fatal("run did not report the unavailable address")
 	}
 }
+
+func TestResolveOptions_CustomerEmailFlagOverridesConfig(t *testing.T) {
+	path := writeTestConfig(t, "customerEmail: config@acme.com\n")
+	c := &GenerateCmd{CustomerEmail: "flag@acme.com"}
+	opts, err := c.resolveOptions(path)
+	if err != nil {
+		t.Fatalf("resolveOptions: %v", err)
+	}
+	if opts.CustomerEmail != "flag@acme.com" {
+		t.Errorf("CustomerEmail: got %q, want the flag value", opts.CustomerEmail)
+	}
+}
+
+func TestResolveOptions_CustomerEmailConfigFallback(t *testing.T) {
+	path := writeTestConfig(t, "customerEmail: config@acme.com\n")
+	opts, err := (&GenerateCmd{}).resolveOptions(path)
+	if err != nil {
+		t.Fatalf("resolveOptions: %v", err)
+	}
+	if opts.CustomerEmail != "config@acme.com" {
+		t.Errorf("CustomerEmail: got %q, want the config value", opts.CustomerEmail)
+	}
+}
+
+func TestResolveOptions_EmailSettings(t *testing.T) {
+	path := writeTestConfig(t, `baseUrl: https://invoices.example.com
+resend:
+  apiKeyFile: /run/secrets/resend-api-key
+  from: invoicer@example.com
+`)
+	opts, err := (&GenerateCmd{}).resolveOptions(path)
+	if err != nil {
+		t.Fatalf("resolveOptions: %v", err)
+	}
+	if opts.BaseURL != "https://invoices.example.com" {
+		t.Errorf("BaseURL: got %q", opts.BaseURL)
+	}
+	if opts.Resend == nil || opts.Resend.APIKeyFile != "/run/secrets/resend-api-key" || opts.Resend.From != "invoicer@example.com" {
+		t.Errorf("Resend: got %+v", opts.Resend)
+	}
+}
+
+func TestValidateEmailSettings(t *testing.T) {
+	complete := &ResolvedOptions{
+		CustomerEmail: "billing@acme.com",
+		BaseURL:       "https://invoices.example.com",
+		Resend: &config.Resend{
+			APIKeyFile: "/run/secrets/resend-api-key",
+			From:       "invoicer@example.com",
+		},
+	}
+
+	cases := []struct {
+		name string
+		opts func() *ResolvedOptions
+		want string
+	}{
+		{
+			name: "no resend settings",
+			opts: func() *ResolvedOptions {
+				return &ResolvedOptions{}
+			},
+		},
+		{
+			name: "empty resend block",
+			opts: func() *ResolvedOptions {
+				return &ResolvedOptions{Resend: &config.Resend{}}
+			},
+		},
+		{
+			name: "complete settings",
+			opts: func() *ResolvedOptions {
+				return complete
+			},
+		},
+		{
+			name: "missing contact email",
+			opts: func() *ResolvedOptions {
+				opts := *complete
+				opts.CustomerEmail = ""
+				return &opts
+			},
+			want: "customerEmail",
+		},
+		{
+			name: "missing base URL",
+			opts: func() *ResolvedOptions {
+				opts := *complete
+				opts.BaseURL = ""
+				return &opts
+			},
+			want: "baseUrl",
+		},
+		{
+			name: "missing API key file",
+			opts: func() *ResolvedOptions {
+				opts := *complete
+				resend := *complete.Resend
+				resend.APIKeyFile = ""
+				opts.Resend = &resend
+				return &opts
+			},
+			want: "resend.apiKeyFile",
+		},
+		{
+			name: "missing sender",
+			opts: func() *ResolvedOptions {
+				opts := *complete
+				resend := *complete.Resend
+				resend.From = ""
+				opts.Resend = &resend
+				return &opts
+			},
+			want: "resend.from",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateEmailSettings(tc.opts())
+			if tc.want == "" {
+				if err != nil {
+					t.Fatalf("validateEmailSettings: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("validateEmailSettings did not report the missing setting")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error: got %q, want it to contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestCLIParsesCustomerEmailFlag(t *testing.T) {
+	var cmd CLI
+	p, err := kong.New(&cmd, kong.Name("invoicer"), kong.Exit(func(int) {}))
+	if err != nil {
+		t.Fatalf("kong.New failed: %v", err)
+	}
+	if _, err := p.Parse([]string{"--customer-email", "billing@acme.com"}); err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if cmd.Generate.CustomerEmail != "billing@acme.com" {
+		t.Errorf("Generate.CustomerEmail: got %q, want %q", cmd.Generate.CustomerEmail, "billing@acme.com")
+	}
+}
+
+func TestCLIParsesSetConfigCustomerEmailFlag(t *testing.T) {
+	var cmd CLI
+	p, err := kong.New(&cmd, kong.Name("invoicer"), kong.Exit(func(int) {}))
+	if err != nil {
+		t.Fatalf("kong.New failed: %v", err)
+	}
+	if _, err := p.Parse([]string{"set", "config", "--customer-email", "billing@acme.com"}); err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if cmd.Set.Config.CustomerEmail != "billing@acme.com" {
+		t.Errorf("Set.Config.CustomerEmail: got %q, want %q", cmd.Set.Config.CustomerEmail, "billing@acme.com")
+	}
+}

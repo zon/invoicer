@@ -380,3 +380,104 @@ model: deepseek/deepseek-flash
 		t.Errorf("saved config still has model: %q", got)
 	}
 }
+
+func TestLoad_EmailSettings(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	content := `customerEmail: billing@acme.com
+baseUrl: https://invoices.example.com
+resend:
+  apiKeyFile: /run/secrets/resend-api-key
+  from: invoicer@example.com
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("writing test config: %v", err)
+	}
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.CustomerEmail != "billing@acme.com" {
+		t.Errorf("CustomerEmail: got %q, want %q", cfg.CustomerEmail, "billing@acme.com")
+	}
+	if cfg.Resend == nil {
+		t.Fatal("Resend settings are nil")
+	}
+	if cfg.Resend.APIKeyFile != "/run/secrets/resend-api-key" {
+		t.Errorf("APIKeyFile: got %q", cfg.Resend.APIKeyFile)
+	}
+	if cfg.Resend.From != "invoicer@example.com" {
+		t.Errorf("From: got %q", cfg.Resend.From)
+	}
+}
+
+func TestSave_SavesCustomerEmail(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	if err := config.Save(path, &config.Config{CustomerEmail: "billing@acme.com"}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.CustomerEmail != "billing@acme.com" {
+		t.Errorf("CustomerEmail: got %q, want %q", cfg.CustomerEmail, "billing@acme.com")
+	}
+	if cfg.Resend != nil {
+		t.Errorf("Resend: got %+v, want nil", cfg.Resend)
+	}
+}
+
+func TestSave_PreservesResendSettings(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	content := `customerEmail: billing@acme.com
+resend:
+  apiKeyFile: /run/secrets/resend-api-key
+  from: invoicer@example.com
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("writing test config: %v", err)
+	}
+
+	if err := config.Save(path, &config.Config{Rate: 200}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.CustomerEmail != "billing@acme.com" {
+		t.Errorf("CustomerEmail was not preserved: got %q", cfg.CustomerEmail)
+	}
+	if cfg.Resend == nil || cfg.Resend.APIKeyFile != "/run/secrets/resend-api-key" || cfg.Resend.From != "invoicer@example.com" {
+		t.Errorf("Resend settings were not preserved: %+v", cfg.Resend)
+	}
+}
+
+func TestResend_Configured(t *testing.T) {
+	cases := []struct {
+		name   string
+		resend *config.Resend
+		want   bool
+	}{
+		{name: "nil", resend: nil, want: false},
+		{name: "empty", resend: &config.Resend{}, want: false},
+		{name: "api key file", resend: &config.Resend{APIKeyFile: "/run/secrets/key"}, want: true},
+		{name: "from", resend: &config.Resend{From: "invoicer@example.com"}, want: true},
+		{name: "both", resend: &config.Resend{APIKeyFile: "/run/secrets/key", From: "invoicer@example.com"}, want: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.resend.Configured(); got != tc.want {
+				t.Errorf("Configured: got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
