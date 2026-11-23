@@ -33,6 +33,7 @@ invoicer [<month> [<year>]] [options]
 | `--database` | | Path to the invoice database. Defaults to `~/.invoicer/invoices.db`. |
 | `--rate` | `-r` | Hourly rate in dollars. Required if not set in config. |
 | `--hours` | `-H` | Hours worked per week. Required if not set in config. |
+| `--version` | | Print the app version and exit. |
 
 ### Examples
 

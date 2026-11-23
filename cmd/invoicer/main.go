@@ -11,6 +11,7 @@ func main() {
 		kong.Name("invoicer"),
 		kong.Description("Generate invoices for an hourly contractor."),
 		kong.UsageOnError(),
+		kong.Vars{"version": cli.Version},
 	)
 	err := ctx.Run()
 	ctx.FatalIfErrorf(err)
