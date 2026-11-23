@@ -92,6 +92,10 @@ type values struct {
 		StorageClass  string `yaml:"storageClass"`
 		ExistingClaim string `yaml:"existingClaim"`
 	} `yaml:"data"`
+	Schedule struct {
+		Enabled bool   `yaml:"enabled"`
+		Cron    string `yaml:"cron"`
+	} `yaml:"schedule"`
 	Service struct {
 		Port int `yaml:"port"`
 	} `yaml:"service"`
@@ -149,6 +153,9 @@ func TestValuesDefaults(t *testing.T) {
 	equal(t, "data.size", v.Data.Size, "1Gi")
 	equal(t, "data.storageClass", v.Data.StorageClass, "reliable")
 	equal(t, "data.existingClaim", v.Data.ExistingClaim, "")
+
+	equal(t, "schedule.enabled", v.Schedule.Enabled, true)
+	equal(t, "schedule.cron", v.Schedule.Cron, "0 9 1 * *")
 
 	equal(t, "service.port", v.Service.Port, 80)
 

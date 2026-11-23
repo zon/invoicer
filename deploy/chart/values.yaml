@@ -30,6 +30,10 @@ data:
   storageClass: reliable
   existingClaim: ""
 
+schedule:
+  enabled: true
+  cron: "0 9 1 * *"
+
 service:
   port: 80
 
