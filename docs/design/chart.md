@@ -1,6 +1,6 @@
 # Chart Design
 
-The Helm chart deploys the web app. The chart lives at `deploy/chart` and deploys the [container image](container.md). It targets the lab cluster.
+The Helm chart deploys the web app and the monthly schedule. The chart lives at `deploy/chart` and deploys the [container image](container.md). It targets the lab cluster.
 
 ## Values
 
@@ -37,6 +37,10 @@ data:
   storageClass: reliable
   existingClaim: ""
 
+schedule:
+  enabled: true
+  cron: "0 9 1 * *"
+
 service:
   port: 80
 
@@ -58,7 +62,7 @@ resources:
     memory: 256Mi
 ```
 
-An empty `image.tag` uses the chart app version. The chart attaches named pull secrets to the pod. The chart version and app version follow [Release](release.md).
+An empty `image.tag` uses the chart app version. The chart attaches named pull secrets to each pod. The chart version and app version follow [Release](release.md).
 
 ## Config
 
@@ -78,9 +82,9 @@ The chart creates a PersistentVolumeClaim and mounts it at `/data`, where the da
 
 The volume holds the database only.
 
-The pod runs as user 1000 with group 1000 and fsGroup 1000, so the app can write the database.
+The pods run as user 1000 with group 1000 and fsGroup 1000, so the app can write the database.
 
-The chart runs one web pod with the `Recreate` strategy. SQLite allows one writer, and the claim is ReadWriteOnce.
+The chart runs one web pod with the `Recreate` strategy, so a rollout releases the claim before the next pod mounts it. The claim is ReadWriteOnce, so the schedule pod runs on the web pod's node.
 
 ## Web App
 
@@ -93,6 +97,14 @@ The Deployment carries a checksum of the config, so a config change restarts the
 The Service is ClusterIP on `service.port` and forwards to 8080.
 
 The chart sets a grace period that covers the web app's shutdown timeout, as [Web](web.md) describes.
+
+## Schedule
+
+The chart renders a CronWorkflow when `schedule.enabled` is true. `schedule.cron` sets the time and defaults to 09:00 UTC on the first day of each month. The workflow uses UTC, matching the invoice month and week dates.
+
+The CronWorkflow runs one pod from the same image with the `generate` argument. The pod mounts the config file and the data claim, as the web app does. It carries the image pull secrets and the same security context and resources. It uses pod affinity to run on the web pod's node, because the claim is ReadWriteOnce.
+
+The chart does not install Argo Workflows. A cluster without Argo sets `schedule.enabled` to false and runs the CLI by hand.
 
 ## Ingress and TLS
 
@@ -108,7 +120,6 @@ The lab Terraform owns the DNS record for `hostname`.
 
 * Building and publishing the image, which belongs to [Build](build.md)
 * Vulnerability scanning, which belongs to [Build](build.md)
-* The monthly schedule
 * DNS records
 * TLS certificates outside cert-manager
 * Database backups

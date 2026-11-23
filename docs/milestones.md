@@ -2,10 +2,6 @@
 
 High level objectives. Work through them in order. See [process](zpecs/process.md).
 
-## Build pipeline
-
-CI builds the container image, scans it for vulnerabilities, and packages the Helm chart. High and critical vulnerabilities stop the build.
-
 ## Monthly invoice schedule
 
 A monthly schedule runs the CLI against the deployed database. It creates the previous month's invoice from the configured options. A second run for the same month does not create a duplicate.
