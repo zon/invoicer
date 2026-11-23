@@ -58,7 +58,7 @@ resources:
     memory: 256Mi
 ```
 
-An empty `image.tag` uses the chart app version. The chart attaches named pull secrets to the pod.
+An empty `image.tag` uses the chart app version. The chart attaches named pull secrets to the pod. The chart version and app version follow [Release](release.md).
 
 ## Config
 
@@ -106,7 +106,7 @@ The lab Terraform owns the DNS record for `hostname`.
 
 ## Out of Scope
 
-* Building and publishing the image
+* Building and publishing the image, which belongs to [Release](release.md)
 * Vulnerability scanning
 * The monthly schedule
 * DNS records

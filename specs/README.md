@@ -8,4 +8,5 @@
 - [Paid Status](paid-status.md) — showing and changing the paid status of a stored invoice from the web app.
 - [PDF](pdf.md) — rendering and downloading a stored invoice as a PDF.
 - [Project Edits](project-edits.md) — changing the project on a stored invoice from the web app.
+- [Release](release.md) — versioning the binary, container image, and chart.
 - [Web](web.md) — the invoice web app.

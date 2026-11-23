@@ -14,6 +14,8 @@ The image runs as a non-root user with the fixed ID 1000. It sets `HOME` to `/ho
 
 The image exposes port 8080, the default web address.
 
+The build stamps the app version into the binary, as [Release](release.md) describes.
+
 ## Paths
 
 * binary — `/usr/local/bin/invoicer`
@@ -29,7 +31,7 @@ Podman builds the image from the repository root. A local run mounts a config fi
 
 ## Out of Scope
 
-* Publishing image tags
+* Publishing image tags, which belong to [Release](release.md)
 * Vulnerability scanning
 * Deployment manifests, which belong to the [chart](chart.md)
 * The monthly schedule

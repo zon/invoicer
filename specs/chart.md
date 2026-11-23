@@ -20,7 +20,7 @@ The chart SHALL live at `deploy/chart` and SHALL deploy the [container image](co
 - AND the chart does not create the namespace
 
 ### Requirement: Values
-The chart SHALL accept `image`, `hostname`, `publicURL`, `config`, `access`, `data`, `service`, `ingress`, `certificate`, and `resources`. An empty `image.tag` SHALL use the chart app version. The chart SHALL attach every `image.pullSecrets` entry to the pod.
+The chart SHALL accept `image`, `hostname`, `publicURL`, `config`, `access`, `data`, `service`, `ingress`, `certificate`, and `resources`. An empty `image.tag` SHALL use the chart app version. The chart SHALL attach every `image.pullSecrets` entry to the pod. The chart version and app version SHALL follow [Release](release.md).
 
 #### Scenario: Default image tag
 - GIVEN an empty `image.tag`
