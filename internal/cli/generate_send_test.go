@@ -127,11 +127,11 @@ func TestGenerateSendsCreatedInvoice(t *testing.T) {
 	if msg.Subject != "Invoice for January 2025" {
 		t.Errorf("Subject: got %q, want the invoice subject", msg.Subject)
 	}
-	if !strings.Contains(msg.Body, "Invoice "+id+" ") {
-		t.Errorf("Body: got %q, want the uppercase identifier", msg.Body)
+	if !strings.Contains(msg.Text, "Invoice "+id+" ") {
+		t.Errorf("Text: got %q, want the uppercase identifier", msg.Text)
 	}
-	if !strings.Contains(msg.Body, "View the invoice: https://invoices.example.com/2025/jan") {
-		t.Errorf("Body: got %q, want the detail link", msg.Body)
+	if !strings.Contains(msg.HTML, "<a href=\"https://invoices.example.com/2025/jan\">View the invoice</a>") {
+		t.Errorf("HTML: got %q, want the detail link", msg.HTML)
 	}
 	if sender.ids[0] != strings.ToLower(id) {
 		t.Errorf("send identifier: got %q, want the stored identifier", sender.ids[0])

@@ -4,6 +4,7 @@ package email
 import (
 	"context"
 	"fmt"
+	"html"
 	"os"
 	"strings"
 	"time"
@@ -12,29 +13,43 @@ import (
 	"github.com/zon/invoicer/internal/invoice"
 )
 
-// Message is the plain-text email for one invoice.
+// Message is the email for one invoice, with plain-text and HTML versions.
 type Message struct {
 	To      string
 	From    string
 	Subject string
-	Body    string
+	Text    string
+	HTML    string
 }
 
 // Render builds the email message for inv, linking to the invoice detail under
 // baseURL.
 func Render(inv *invoice.Invoice, baseURL, from string) Message {
+	link := invoiceURL(baseURL, inv.Year, inv.Month)
+	identifier := strings.ToUpper(inv.ID)
 	return Message{
 		To:      inv.ContactEmail,
 		From:    from,
 		Subject: fmt.Sprintf("Invoice for %s %d", inv.Month, inv.Year),
-		Body: fmt.Sprintf(
+		Text: fmt.Sprintf(
 			"Invoice %s for %s %d from %s.\n\nTotal: $%.2f\nView the invoice: %s",
-			strings.ToUpper(inv.ID),
+			identifier,
 			inv.Month,
 			inv.Year,
 			inv.Vendor,
 			inv.Total(),
-			invoiceURL(baseURL, inv.Year, inv.Month),
+			link,
+		),
+		HTML: fmt.Sprintf(
+			"<p>Invoice %s for %s %d from %s.</p>\n"+
+				"<p>Total: $%.2f</p>\n"+
+				"<p><a href=\"%s\">View the invoice</a></p>\n",
+			html.EscapeString(identifier),
+			inv.Month,
+			inv.Year,
+			html.EscapeString(inv.Vendor),
+			inv.Total(),
+			html.EscapeString(link),
 		),
 	}
 }
@@ -79,7 +94,8 @@ func (s *Sender) Send(msg Message, id string) (string, error) {
 		From:    msg.From,
 		To:      []string{msg.To},
 		Subject: msg.Subject,
-		Text:    msg.Body,
+		Text:    msg.Text,
+		Html:    msg.HTML,
 	}, &resend.SendEmailOptions{IdempotencyKey: "invoice/" + id})
 	if err != nil {
 		return "", fmt.Errorf("sending invoice email: %w", err)

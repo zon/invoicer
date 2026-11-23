@@ -20,6 +20,7 @@ type sentEmail struct {
 	To          []string `json:"to"`
 	Subject     string   `json:"subject"`
 	Text        string   `json:"text"`
+	Html        string   `json:"html"`
 	Attachments []any    `json:"attachments"`
 }
 
@@ -37,7 +38,8 @@ func testMessage() Message {
 		To:      "billing@acme.com",
 		From:    "invoicer@example.com",
 		Subject: "Invoice for October 2026",
-		Body:    "Invoice A1B2C3 for October 2026 from Jane Smith.\n\nTotal: $4800.00",
+		Text:    "Invoice A1B2C3 for October 2026 from Jane Smith.\n\nTotal: $4800.00",
+		HTML:    "<p>Invoice A1B2C3 for October 2026 from Jane Smith.</p>\n<p>Total: $4800.00</p>",
 	}
 }
 
@@ -99,8 +101,11 @@ func TestSendSendsMessageAndReturnsIdentifier(t *testing.T) {
 	if got.email.Subject != "Invoice for October 2026" {
 		t.Errorf("Subject: got %q, want the invoice subject", got.email.Subject)
 	}
-	if got.email.Text != testMessage().Body {
-		t.Errorf("Text: got %q, want the rendered body", got.email.Text)
+	if got.email.Text != testMessage().Text {
+		t.Errorf("Text: got %q, want the rendered text", got.email.Text)
+	}
+	if got.email.Html != testMessage().HTML {
+		t.Errorf("Html: got %q, want the rendered HTML", got.email.Html)
 	}
 	if got.email.Attachments != nil {
 		t.Errorf("Attachments: got %v, want none", got.email.Attachments)

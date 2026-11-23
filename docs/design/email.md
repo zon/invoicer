@@ -22,14 +22,15 @@ A failed send reports an error and exits nonzero. The invoice stays stored with 
 
 ## Message
 
-The message is plain text, so customer names never render as markup. It has one recipient and no attachments. The subject is `Invoice for October 2026`.
+The message is HTML with a plain-text alternative, so customer names never render as markup. It has one recipient and no attachments. The subject is `Invoice for October 2026`.
 
+```html
+<p>Invoice 0123456789 for October 2026 from Jane Smith.</p>
+<p>Total: $4800.00</p>
+<p><a href="https://invoices.example.com/2026/oct">View the invoice</a></p>
 ```
-Invoice 0123456789 for October 2026 from Jane Smith.
 
-Total: $4800.00
-View the invoice: https://invoices.example.com/2026/oct
-```
+Stored values are HTML-escaped, so a vendor named `<b>Jane</b>` shows as text. The plain-text alternative holds the same content, with the link written out after `View the invoice: `.
 
 The link is `baseUrl` with no trailing slash plus the detail path, like `/2026/oct`. It opens the invoice detail and needs sign-in, as [Access](access.md) describes. The customer group may sign in.
 

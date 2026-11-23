@@ -38,23 +38,33 @@ func TestRenderInvoiceMessage(t *testing.T) {
 		t.Errorf("Subject: got %q, want %q", msg.Subject, "Invoice for October 2026")
 	}
 
-	want := "Invoice ABC123 for October 2026 from Jane Smith.\n\n" +
+	wantText := "Invoice ABC123 for October 2026 from Jane Smith.\n\n" +
 		"Total: $4800.00\n" +
 		"View the invoice: https://invoices.example.com/2026/oct"
-	if msg.Body != want {
-		t.Errorf("Body:\n got %q\nwant %q", msg.Body, want)
+	if msg.Text != wantText {
+		t.Errorf("Text:\n got %q\nwant %q", msg.Text, wantText)
+	}
+
+	wantHTML := "<p>Invoice ABC123 for October 2026 from Jane Smith.</p>\n" +
+		"<p>Total: $4800.00</p>\n" +
+		"<p><a href=\"https://invoices.example.com/2026/oct\">View the invoice</a></p>\n"
+	if msg.HTML != wantHTML {
+		t.Errorf("HTML:\n got %q\nwant %q", msg.HTML, wantHTML)
 	}
 }
 
 func TestRenderTrimsTrailingSlashFromBaseURL(t *testing.T) {
 	msg := email.Render(testInvoice(), "https://invoices.example.com/", "invoicer@example.com")
 
-	want := "View the invoice: https://invoices.example.com/2026/oct"
-	if !strings.Contains(msg.Body, want) {
-		t.Errorf("Body: got %q, want it to contain %q", msg.Body, want)
+	wantLink := "https://invoices.example.com/2026/oct"
+	if !strings.Contains(msg.Text, "View the invoice: "+wantLink) {
+		t.Errorf("Text: got %q, want it to contain %q", msg.Text, wantLink)
 	}
-	if strings.Contains(msg.Body, "example.com//2026/oct") {
-		t.Errorf("Body: got %q, want one slash before the detail path", msg.Body)
+	if !strings.Contains(msg.HTML, "href=\""+wantLink+"\"") {
+		t.Errorf("HTML: got %q, want the detail link", msg.HTML)
+	}
+	if strings.Contains(msg.Text+msg.HTML, "example.com//2026/oct") {
+		t.Errorf("message: got a double slash before the detail path")
 	}
 }
 
@@ -64,18 +74,27 @@ func TestRenderUppercasesIdentifier(t *testing.T) {
 
 	msg := email.Render(inv, "https://invoices.example.com", "invoicer@example.com")
 
-	if !strings.Contains(msg.Body, "Invoice A1B2C3 ") {
-		t.Errorf("Body: got %q, want the uppercase identifier", msg.Body)
+	if !strings.Contains(msg.Text, "Invoice A1B2C3 ") {
+		t.Errorf("Text: got %q, want the uppercase identifier", msg.Text)
+	}
+	if !strings.Contains(msg.HTML, "Invoice A1B2C3 ") {
+		t.Errorf("HTML: got %q, want the uppercase identifier", msg.HTML)
 	}
 }
 
-func TestRenderKeepsStoredMarkupAsText(t *testing.T) {
+func TestRenderEscapesStoredMarkupInHTML(t *testing.T) {
 	inv := testInvoice()
 	inv.Vendor = "<b>Jane</b>"
 
 	msg := email.Render(inv, "https://invoices.example.com", "invoicer@example.com")
 
-	if !strings.Contains(msg.Body, "from <b>Jane</b>.") {
-		t.Errorf("Body: got %q, want the vendor as plain text", msg.Body)
+	if !strings.Contains(msg.Text, "from <b>Jane</b>.") {
+		t.Errorf("Text: got %q, want the vendor as written", msg.Text)
+	}
+	if !strings.Contains(msg.HTML, "from &lt;b&gt;Jane&lt;/b&gt;.") {
+		t.Errorf("HTML: got %q, want the vendor escaped", msg.HTML)
+	}
+	if strings.Contains(msg.HTML, "<b>Jane</b>") {
+		t.Errorf("HTML: got %q, want no stored markup", msg.HTML)
 	}
 }

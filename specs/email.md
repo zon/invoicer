@@ -60,16 +60,17 @@ The store SHALL record the send time on the invoice. Generate SHALL send when th
 - THEN it sends no email
 
 ### Requirement: Message
-The message SHALL be plain text with one recipient and no attachments. The subject SHALL be `Invoice for October 2026`, with the invoice's month and year.
+The message SHALL have an HTML body and a plain-text alternative, with one recipient and no attachments. The subject SHALL be `Invoice for October 2026`, with the invoice's month and year.
 
-The body SHALL follow this format:
+The HTML body SHALL follow this format:
 
+```html
+<p>Invoice 0123456789 for October 2026 from Jane Smith.</p>
+<p>Total: $4800.00</p>
+<p><a href="https://invoices.example.com/2026/oct">View the invoice</a></p>
 ```
-Invoice 0123456789 for October 2026 from Jane Smith.
 
-Total: $4800.00
-View the invoice: https://invoices.example.com/2026/oct
-```
+Stored values SHALL be HTML-escaped, so a vendor named `<b>Jane</b>` shows as text. The plain-text alternative SHALL hold the same content, with the link written out after `View the invoice: `.
 
 The identifier SHALL appear in uppercase, as [Invoice Identity](invoices.md#requirement-invoice-identity) describes. The total SHALL follow [Invoice Amount](invoices.md#requirement-invoice-amount) and SHALL show dollars with two decimals.
 
@@ -79,7 +80,7 @@ The link SHALL be `baseUrl` with no trailing slash plus the detail path, as [Web
 - GIVEN an invoice for October 2026 with a total of $4800.00
 - WHEN the email sends
 - THEN the subject is `Invoice for October 2026`
-- AND the body names the uppercase identifier, month, year, vendor, total, and link
+- AND the HTML body names the uppercase identifier, month, year, vendor, total, and clickable link
 
 #### Scenario: Trailing slash
 - GIVEN a `baseUrl` ending in a slash
@@ -89,7 +90,8 @@ The link SHALL be `baseUrl` with no trailing slash plus the detail path, as [Web
 #### Scenario: Stored markup is text
 - GIVEN a vendor named `<b>Jane</b>`
 - WHEN the email sends
-- THEN the vendor appears as plain text
+- THEN the vendor appears as text in the HTML body
+- AND the vendor appears as written in the plain-text alternative
 
 ### Requirement: Delivery
 The system SHALL send through the Resend REST API over HTTPS. It SHALL NOT use the SMTP relay. It SHALL read the API key from the file named by `resend.apiKeyFile`.
