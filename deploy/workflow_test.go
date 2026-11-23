@@ -370,6 +370,45 @@ func TestWorkflowPublishesNoLatestTag(t *testing.T) {
 	}
 }
 
+func TestWorkflowPublishesTheChart(t *testing.T) {
+	steps := pipelineSteps(t, loadWorkflow(t))
+
+	publish := stepIndexMatching(steps, publishesChart)
+	if publish < 0 {
+		t.Fatalf("workflow does not publish the chart:\n%s", renderSteps(steps))
+	}
+	step := steps[publish]
+	if !strings.Contains(step.Run, filepath.Join("deploy", "chart")) {
+		t.Fatalf("chart publish does not use deploy/chart:\n%s", step.Run)
+	}
+	if !strings.Contains(step.Run, "oci://ghcr.io/zon/charts") {
+		t.Fatalf("chart publish does not use oci://ghcr.io/zon/charts:\n%s", step.Run)
+	}
+	if !strings.Contains(step.If, "github.event_name == 'push'") {
+		t.Fatalf("chart publish does not run only on pushes: %q", step.If)
+	}
+}
+
+func TestWorkflowLogsInToChartRegistry(t *testing.T) {
+	steps := pipelineSteps(t, loadWorkflow(t))
+
+	login := stepIndexMatching(steps, logsInToChartRegistry)
+	if login < 0 {
+		t.Fatalf("workflow does not log in to the chart registry:\n%s", renderSteps(steps))
+	}
+	if !strings.Contains(steps[login].Run, "secrets.GITHUB_TOKEN") {
+		t.Fatalf("chart registry login does not use the workflow GITHUB_TOKEN:\n%s", steps[login].Run)
+	}
+	if !strings.Contains(steps[login].If, "github.event_name == 'push'") {
+		t.Fatalf("chart registry login does not run only on pushes: %q", steps[login].If)
+	}
+
+	publish := stepIndexMatching(steps, publishesChart)
+	if publish < 0 || login > publish {
+		t.Fatalf("workflow logs in to the chart registry at %d but publishes at %d", login, publish)
+	}
+}
+
 func TestWorkflowGrantsPackageWrite(t *testing.T) {
 	permissions := loadWorkflow(t).Permissions
 
@@ -432,6 +471,14 @@ func buildsImage(step workflowStep) bool {
 func lintsChart(step workflowStep) bool {
 	return strings.Contains(step.Run, "helm lint") &&
 		strings.Contains(step.Run, filepath.Join("deploy", "chart"))
+}
+
+func publishesChart(step workflowStep) bool {
+	return strings.Contains(step.Run, filepath.Join("scripts", "publish-chart.sh"))
+}
+
+func logsInToChartRegistry(step workflowStep) bool {
+	return strings.Contains(step.Run, "helm registry login") && strings.Contains(step.Run, "ghcr.io")
 }
 
 func savesImage(step workflowStep) bool {
@@ -555,6 +602,7 @@ func isPublishing(step workflowStep) bool {
 		"helm push",
 		"oras push",
 		"crane push",
+		"scripts/publish-chart.sh",
 	} {
 		if strings.Contains(text, command) {
 			return true
