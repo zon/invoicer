@@ -61,6 +61,17 @@ func TestChartMetadata(t *testing.T) {
 	}
 }
 
+func TestChartAppVersionMatchesRepoVersion(t *testing.T) {
+	var chart chartMetadata
+	decode(t, filepath.Join(chartDir(t), "Chart.yaml"), &chart)
+
+	data, err := os.ReadFile(filepath.Join(chartDir(t), "..", "..", "VERSION"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	equal(t, "appVersion", chart.AppVersion, strings.TrimSpace(string(data)))
+}
+
 type values struct {
 	Image struct {
 		Repository  string   `yaml:"repository"`
