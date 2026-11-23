@@ -13,5 +13,8 @@ dev *ARGS:
 test:
 	go test ./...
 
+release:
+	sh scripts/release.sh
+
 default:
 	just --list
