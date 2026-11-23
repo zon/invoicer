@@ -15,7 +15,8 @@ import (
 
 func outputID(t *testing.T, out string) string {
 	t.Helper()
-	_, id, ok := strings.Cut(strings.TrimSpace(out), ": ")
+	line, _, _ := strings.Cut(strings.TrimSpace(out), "\n")
+	_, id, ok := strings.Cut(line, ": ")
 	if !ok || id == "" {
 		t.Fatalf("expected an invoice identifier in output %q", out)
 	}

@@ -260,5 +260,17 @@ func (c *GenerateCmd) run(configPath string, out io.Writer) error {
 		action = "Created"
 	}
 	fmt.Fprintf(out, "%s invoice for %s %d: %s\n", action, month.String(), year, strings.ToUpper(id))
-	return nil
+
+	if !opts.Resend.Configured() {
+		return nil
+	}
+
+	stored, err := s.Get(id)
+	if err != nil {
+		return fmt.Errorf("loading saved invoice: %w", err)
+	}
+	if !stored.EmailSentAt.IsZero() {
+		return nil
+	}
+	return sendInvoice(out, s, stored, opts)
 }
