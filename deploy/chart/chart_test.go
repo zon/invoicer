@@ -853,6 +853,64 @@ func TestCertificateUsesValues(t *testing.T) {
 	equal(t, "issuerRef.name", spec["issuerRef"].(map[string]any)["name"], "staging")
 }
 
+func cronWorkflow(t *testing.T, manifests []map[string]any) map[string]any {
+	t.Helper()
+	return findManifest(t, manifests, "argoproj.io/v1alpha1", "CronWorkflow")
+}
+
+func cronWorkflowSpec(t *testing.T, manifests []map[string]any) map[string]any {
+	t.Helper()
+	spec, ok := cronWorkflow(t, manifests)["spec"].(map[string]any)
+	if !ok {
+		t.Fatal("CronWorkflow has no spec")
+	}
+	return spec
+}
+
+func TestScheduleRendersOneCronWorkflow(t *testing.T) {
+	manifests := renderChart(t)
+
+	count := 0
+	for _, manifest := range manifests {
+		if manifest["kind"] == "CronWorkflow" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("chart renders %d CronWorkflows, want one", count)
+	}
+
+	workflow := cronWorkflow(t, manifests)
+	metadata := workflow["metadata"].(map[string]any)
+	equal(t, "namespace", metadata["namespace"], "invoicer")
+	if name, _ := metadata["name"].(string); name == "" {
+		t.Fatal("CronWorkflow has no name")
+	}
+}
+
+func TestScheduleUsesDefaultCron(t *testing.T) {
+	spec := cronWorkflowSpec(t, renderChart(t))
+
+	equal(t, "schedule", spec["schedule"], "0 9 1 * *")
+	equal(t, "timezone", spec["timezone"], "UTC")
+	equal(t, "concurrencyPolicy", spec["concurrencyPolicy"], "Forbid")
+}
+
+func TestScheduleUsesCronValue(t *testing.T) {
+	spec := cronWorkflowSpec(t, renderChart(t, "--set", "schedule.cron=30 6 2 * *"))
+
+	equal(t, "schedule", spec["schedule"], "30 6 2 * *")
+	equal(t, "timezone", spec["timezone"], "UTC")
+}
+
+func TestScheduleDisabledRendersNoCronWorkflow(t *testing.T) {
+	for _, manifest := range renderChart(t, "--set", "schedule.enabled=false") {
+		if manifest["kind"] == "CronWorkflow" {
+			t.Fatal("chart renders a CronWorkflow when disabled")
+		}
+	}
+}
+
 func TestCertificateDisabled(t *testing.T) {
 	manifests := renderChart(t, "--set", "certificate.enabled=false")
 

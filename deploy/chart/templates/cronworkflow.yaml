@@ -1,0 +1,22 @@
+{{- if .Values.schedule.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: {{ include "invoicer.fullname" . }}
+  namespace: invoicer
+  labels:
+    {{- include "invoicer.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.schedule.cron | quote }}
+  timezone: UTC
+  concurrencyPolicy: Forbid
+  workflowSpec:
+    entrypoint: generate
+    templates:
+      - name: generate
+        container:
+          image: {{ include "invoicer.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - generate
+{{- end }}
