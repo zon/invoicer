@@ -1019,6 +1019,28 @@ func TestSchedulePodUsesResourceValues(t *testing.T) {
 	equalsMap(t, "schedule resources", cronWorkflowContainer(t, manifests)["resources"], want)
 }
 
+func TestSchedulePodAffinity(t *testing.T) {
+	manifests := renderChart(t)
+
+	affinity, _ := cronWorkflowTemplate(t, manifests)["affinity"].(map[string]any)
+	podAffinity, _ := affinity["podAffinity"].(map[string]any)
+	terms, _ := podAffinity["requiredDuringSchedulingIgnoredDuringExecution"].([]any)
+	if len(terms) != 1 {
+		t.Fatalf("schedule pod has %d required affinity terms, want one", len(terms))
+	}
+
+	term := terms[0].(map[string]any)
+	equal(t, "topologyKey", term["topologyKey"], "kubernetes.io/hostname")
+
+	deployment := findKind(t, manifests, "Deployment")
+	webLabels, _ := deployment["spec"].(map[string]any)["template"].(map[string]any)["metadata"].(map[string]any)["labels"].(map[string]any)
+	if len(webLabels) == 0 {
+		t.Fatal("web pod has no labels")
+	}
+	selector, _ := term["labelSelector"].(map[string]any)
+	equalsMap(t, "affinity label selector", selector["matchLabels"], webLabels)
+}
+
 func TestScheduleUsesDefaultCron(t *testing.T) {
 	spec := cronWorkflowSpec(t, renderChart(t))
 

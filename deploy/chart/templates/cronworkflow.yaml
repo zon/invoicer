@@ -22,6 +22,13 @@ spec:
       - name: generate
         securityContext:
           {{- include "invoicer.podSecurityContext" . | nindent 10 }}
+        affinity:
+          podAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchLabels:
+                    {{- include "invoicer.selectorLabels" . | nindent 20 }}
+                topologyKey: kubernetes.io/hostname
         volumes:
           - name: config
             configMap:
