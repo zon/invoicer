@@ -114,10 +114,6 @@ type values struct {
 			Memory string `yaml:"memory"`
 		} `yaml:"limits"`
 	} `yaml:"resources"`
-	CLI struct {
-		Enabled bool     `yaml:"enabled"`
-		Args    []string `yaml:"args"`
-	} `yaml:"cli"`
 }
 
 func TestValuesDefaults(t *testing.T) {
@@ -167,11 +163,6 @@ func TestValuesDefaults(t *testing.T) {
 	equal(t, "resources.requests.memory", v.Resources.Requests.Memory, "64Mi")
 	equal(t, "resources.limits.cpu", v.Resources.Limits.CPU, "500m")
 	equal(t, "resources.limits.memory", v.Resources.Limits.Memory, "256Mi")
-
-	equal(t, "cli.enabled", v.CLI.Enabled, false)
-	if len(v.CLI.Args) != 0 {
-		t.Fatalf("cli.args: got %v, want empty", v.CLI.Args)
-	}
 }
 
 type renderedConfig struct {
@@ -648,18 +639,16 @@ func containerImage(t *testing.T, container map[string]any) string {
 }
 
 func TestImageDefaultsToChartAppVersion(t *testing.T) {
-	manifests := renderChart(t, "--set", "cli.enabled=true")
+	manifests := renderChart(t)
 	want := "ghcr.io/zon/invoicer:" + appVersion(t)
 
 	equal(t, "web image", containerImage(t, webContainer(t, manifests)), want)
-	equal(t, "cli image", containerImage(t, jobContainer(t, manifests)), want)
 }
 
 func TestImageUsesTagValue(t *testing.T) {
-	manifests := renderChart(t, "--set", "image.tag=v1.2.3", "--set", "cli.enabled=true")
+	manifests := renderChart(t, "--set", "image.tag=v1.2.3")
 
 	equal(t, "web image", containerImage(t, webContainer(t, manifests)), "ghcr.io/zon/invoicer:v1.2.3")
-	equal(t, "cli image", containerImage(t, jobContainer(t, manifests)), "ghcr.io/zon/invoicer:v1.2.3")
 }
 
 func pullSecretNames(t *testing.T, podSpec map[string]any) []any {
@@ -677,19 +666,16 @@ func pullSecretNames(t *testing.T, podSpec map[string]any) []any {
 func TestImagePullSecrets(t *testing.T) {
 	manifests := renderChart(t,
 		"--set", "image.pullSecrets={registry-a,registry-b}",
-		"--set", "cli.enabled=true",
 	)
 	want := []any{"registry-a", "registry-b"}
 
 	equalsAny(t, "web imagePullSecrets", pullSecretNames(t, deploymentPodSpec(t, manifests)), want)
-	equalsAny(t, "cli imagePullSecrets", pullSecretNames(t, jobPodSpec(t, manifests)), want)
 }
 
 func TestNoImagePullSecretsByDefault(t *testing.T) {
-	manifests := renderChart(t, "--set", "cli.enabled=true")
+	manifests := renderChart(t)
 
 	equalsAny(t, "web imagePullSecrets", pullSecretNames(t, deploymentPodSpec(t, manifests)), nil)
-	equalsAny(t, "cli imagePullSecrets", pullSecretNames(t, jobPodSpec(t, manifests)), nil)
 }
 
 func TestDeploymentRestartsWhenConfigChanges(t *testing.T) {
@@ -886,176 +872,6 @@ func equalsAny(t *testing.T, name string, got any, want []any) {
 		if values[i] != want[i] {
 			t.Fatalf("%s: got %v, want %v", name, got, want)
 		}
-	}
-}
-
-func jobPodSpec(t *testing.T, manifests []map[string]any) map[string]any {
-	t.Helper()
-	job := findManifest(t, manifests, "batch/v1", "Job")
-	return job["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
-}
-
-func jobContainer(t *testing.T, manifests []map[string]any) map[string]any {
-	t.Helper()
-	containers, _ := jobPodSpec(t, manifests)["containers"].([]any)
-	if len(containers) != 1 {
-		t.Fatalf("job runs %d containers, want one", len(containers))
-	}
-	return containers[0].(map[string]any)
-}
-
-func TestCLIJobDisabled(t *testing.T) {
-	for _, manifest := range renderChart(t) {
-		if manifest["kind"] == "Job" {
-			t.Fatal("chart renders a Job when the CLI is disabled")
-		}
-	}
-}
-
-func TestCLIJobRunsArguments(t *testing.T) {
-	manifests := renderChart(t,
-		"--set", "cli.enabled=true",
-		"--set-string", "cli.args={january,2027}",
-	)
-	job := findManifest(t, manifests, "batch/v1", "Job")
-	spec := job["spec"].(map[string]any)
-
-	equal(t, "backoffLimit", spec["backoffLimit"], 0)
-	equal(t, "ttlSecondsAfterFinished", spec["ttlSecondsAfterFinished"], 0)
-	equal(t, "restartPolicy", jobPodSpec(t, manifests)["restartPolicy"], "Never")
-
-	container := jobContainer(t, manifests)
-	equal(t, "image", container["image"], webContainer(t, manifests)["image"])
-	equalsAny(t, "args", container["args"], []any{"january", "2027"})
-}
-
-func TestCLIJobSharesConfigAndClaim(t *testing.T) {
-	manifests := renderChart(t, "--set", "cli.enabled=true")
-	podSpec := jobPodSpec(t, manifests)
-	container := jobContainer(t, manifests)
-
-	assertJobConfigMount(t, manifests, podSpec, container)
-	assertJobDataMount(t, manifests, podSpec, container)
-}
-
-func assertJobConfigMount(t *testing.T, manifests []map[string]any, podSpec, container map[string]any) {
-	t.Helper()
-	const configPath = "/home/invoicer/.invoicer/config.yaml"
-	configName, _ := findKind(t, manifests, "ConfigMap")["metadata"].(map[string]any)["name"].(string)
-
-	volumeName := findMount(t, container, configPath)
-	mount := findMountEntry(t, container, configPath)
-	equal(t, "config mount readOnly", mount["readOnly"], true)
-
-	source := findVolumeSource(t, podSpec, volumeName, "configMap")
-	if source["name"] != configName {
-		t.Fatalf("config map name: got %v, want %s", source["name"], configName)
-	}
-	equal(t, "config file mode", source["defaultMode"], 0o444)
-}
-
-func assertJobDataMount(t *testing.T, manifests []map[string]any, podSpec, container map[string]any) {
-	t.Helper()
-	volumeName := findMount(t, container, "/data")
-	mount := findMountEntry(t, container, "/data")
-	if mount["readOnly"] == true {
-		t.Fatal("job mounts the data claim read-only")
-	}
-
-	source := findVolumeSource(t, podSpec, volumeName, "persistentVolumeClaim")
-	wantClaim := pvcName(t, manifests)
-	if claimName, _ := source["claimName"].(string); claimName != wantClaim {
-		t.Fatalf("data claim: got %v, want %s", source["claimName"], wantClaim)
-	}
-}
-
-func findMount(t *testing.T, container map[string]any, path string) string {
-	t.Helper()
-	mount := findMountEntry(t, container, path)
-	name, _ := mount["name"].(string)
-	if name == "" {
-		t.Fatalf("job mounts no volume at %s", path)
-	}
-	return name
-}
-
-func findMountEntry(t *testing.T, container map[string]any, path string) map[string]any {
-	t.Helper()
-	mounts, _ := container["volumeMounts"].([]any)
-	for _, value := range mounts {
-		mount := value.(map[string]any)
-		if mount["mountPath"] == path {
-			return mount
-		}
-	}
-	t.Fatalf("job mounts no volume at %s", path)
-	return nil
-}
-
-func findVolumeSource(t *testing.T, podSpec map[string]any, name, kind string) map[string]any {
-	t.Helper()
-	volumes, _ := podSpec["volumes"].([]any)
-	for _, value := range volumes {
-		volume := value.(map[string]any)
-		if volume["name"] != name {
-			continue
-		}
-		source, ok := volume[kind].(map[string]any)
-		if !ok {
-			t.Fatalf("volume %s is not a %s", name, kind)
-		}
-		return source
-	}
-	t.Fatalf("job has no volume named %s", name)
-	return nil
-}
-
-func TestCLIJobRunsOnWebNode(t *testing.T) {
-	manifests := renderChart(t, "--set", "cli.enabled=true")
-	affinity, _ := jobPodSpec(t, manifests)["affinity"].(map[string]any)
-	podAffinity, _ := affinity["podAffinity"].(map[string]any)
-	terms, _ := podAffinity["requiredDuringSchedulingIgnoredDuringExecution"].([]any)
-	if len(terms) != 1 {
-		t.Fatalf("job has %d pod affinity terms, want one", len(terms))
-	}
-
-	term := terms[0].(map[string]any)
-	equal(t, "topologyKey", term["topologyKey"], "kubernetes.io/hostname")
-
-	selector, _ := term["labelSelector"].(map[string]any)
-	matchLabels, _ := selector["matchLabels"].(map[string]any)
-	if len(matchLabels) == 0 {
-		t.Fatal("job pod affinity has no label selector")
-	}
-
-	deployment := findKind(t, manifests, "Deployment")
-	labels, _ := deployment["spec"].(map[string]any)["template"].(map[string]any)["metadata"].(map[string]any)["labels"].(map[string]any)
-	for key, value := range matchLabels {
-		if labels[key] != value {
-			t.Fatalf("job affinity label %s: got %v, want %v", key, value, labels[key])
-		}
-	}
-}
-
-func TestCLIJobPodIsNotAWebEndpoint(t *testing.T) {
-	manifests := renderChart(t, "--set", "cli.enabled=true")
-	job := findManifest(t, manifests, "batch/v1", "Job")
-	labels, _ := job["spec"].(map[string]any)["template"].(map[string]any)["metadata"].(map[string]any)["labels"].(map[string]any)
-
-	service := findKind(t, manifests, "Service")
-	selector, _ := service["spec"].(map[string]any)["selector"].(map[string]any)
-	for key, value := range selector {
-		if labels[key] == value {
-			t.Fatalf("job pod matches web service selector %s=%v", key, value)
-		}
-	}
-}
-
-func TestCLIJobEmptyArguments(t *testing.T) {
-	container := jobContainer(t, renderChart(t, "--set", "cli.enabled=true"))
-	args, _ := container["args"].([]any)
-	if len(args) != 0 {
-		t.Fatalf("job args: got %v, want none", args)
 	}
 }
 

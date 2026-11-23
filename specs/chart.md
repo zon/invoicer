@@ -1,7 +1,7 @@
 # Chart Specification
 
 ## Purpose
-The Helm chart deploys the web app on the lab cluster. It also runs the CLI against the same database on request.
+The Helm chart deploys the web app on the lab cluster.
 
 ## Requirements
 
@@ -20,7 +20,7 @@ The chart SHALL live at `deploy/chart` and SHALL deploy the [container image](co
 - AND the chart does not create the namespace
 
 ### Requirement: Values
-The chart SHALL accept `image`, `hostname`, `publicURL`, `config`, `access`, `data`, `service`, `ingress`, `certificate`, `resources`, and `cli`. An empty `image.tag` SHALL use the chart app version. The chart SHALL attach every `image.pullSecrets` entry to the pod.
+The chart SHALL accept `image`, `hostname`, `publicURL`, `config`, `access`, `data`, `service`, `ingress`, `certificate`, and `resources`. An empty `image.tag` SHALL use the chart app version. The chart SHALL attach every `image.pullSecrets` entry to the pod.
 
 #### Scenario: Default image tag
 - GIVEN an empty `image.tag`
@@ -160,29 +160,3 @@ Setting `certificate.enabled` to false SHALL omit the Certificate and its TLS co
 - WHEN the chart renders
 - THEN it creates no Certificate
 - AND the Ingress has no TLS configuration
-
-### Requirement: CLI Job
-The chart SHALL render an optional Job from `cli.enabled` and `cli.args`. The Job SHALL run the container with `cli.args` as arguments and SHALL use the same config and claim as the web app.
-
-The claim is ReadWriteOnce, so the Job SHALL use pod affinity to run on the web pod's node. The Job SHALL run once and SHALL NOT restart on failure. The cluster SHALL remove it after it finishes. Empty `cli.args` SHALL generate the previous month.
-
-#### Scenario: Disabled CLI
-- GIVEN `cli.enabled` is false
-- WHEN the chart renders
-- THEN it creates no Job
-
-#### Scenario: CLI with arguments
-- GIVEN `cli.enabled` is true and `cli.args` is `["january", "2027"]`
-- WHEN the chart renders
-- THEN the Job runs `invoicer january 2027`
-- AND it mounts the same config and claim as the web app
-
-#### Scenario: Same node
-- GIVEN an enabled CLI Job
-- WHEN the Job renders
-- THEN its pod affinity selects the web pod's node
-
-#### Scenario: Empty arguments
-- GIVEN `cli.enabled` is true and `cli.args` is empty
-- WHEN the Job runs
-- THEN it generates the previous month

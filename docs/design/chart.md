@@ -1,6 +1,6 @@
 # Chart Design
 
-The Helm chart deploys the web app. It also runs the CLI against the same database on request. The chart lives at `deploy/chart` and deploys the [container image](container.md). It targets the lab cluster.
+The Helm chart deploys the web app. The chart lives at `deploy/chart` and deploys the [container image](container.md). It targets the lab cluster.
 
 ## Values
 
@@ -56,10 +56,6 @@ resources:
   limits:
     cpu: 500m
     memory: 256Mi
-
-cli:
-  enabled: false
-  args: []
 ```
 
 An empty `image.tag` uses the chart app version. The chart attaches named pull secrets to the pod.
@@ -107,12 +103,6 @@ The chart creates a cert-manager Certificate for `hostname` with the `lets-encry
 The lab Terraform owns the DNS record for `hostname`.
 
 `publicURL` is the public address of the web app. Its host is `hostname`. The OIDC client registers `publicURL` plus `/callback` as the callback address.
-
-## CLI
-
-The chart renders an optional Job from `cli.enabled` and `cli.args`. The Job runs in the `invoicer` namespace with `cli.args` as arguments, like `["january", "2027"]`. It mounts the same config file and the same claim, so it uses the same database as the web app.
-
-The claim is ReadWriteOnce, so the Job uses pod affinity to run on the web app's node. The Job runs once and does not restart on failure. The cluster removes it after it finishes. An empty `cli.args` generates the previous month.
 
 ## Out of Scope
 

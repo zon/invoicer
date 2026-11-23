@@ -1,5 +1,5 @@
 - path: deploy/chart
-  description: Deploys the web app and CLI to Kubernetes with Helm.
+  description: Deploys the web app to Kubernetes with Helm.
 
 - path: deploy/container
   description: Builds the image that runs the invoice CLI and web app.

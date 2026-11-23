@@ -230,7 +230,7 @@ helm install invoicer deploy/chart --namespace invoicer \
   --set access.issuer=https://id.example.com
 ```
 
-Set `hostname` and `publicURL` to the public address and `access` to the OIDC provider. The defaults live in `deploy/chart/values.yaml`. The chart creates the web Deployment, Service, claim, Ingress, and Certificate. Set `cli.enabled` and `cli.args` to run the CLI against the same database.
+Set `hostname` and `publicURL` to the public address and `access` to the OIDC provider. The defaults live in `deploy/chart/values.yaml`. The chart creates the web Deployment, Service, claim, Ingress, and Certificate.
 
 ## Development
 
