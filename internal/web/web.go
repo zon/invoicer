@@ -113,6 +113,10 @@ type detailData struct {
 	Invoice *invoiceDetail
 }
 
+type notFoundData struct {
+	User *access.User
+}
+
 type invoiceRow struct {
 	Customer string
 	Month    string
@@ -345,7 +349,7 @@ func (s *Server) yearMonth(c *gin.Context) (int, time.Month, bool) {
 }
 
 func (s *Server) notFound(c *gin.Context) {
-	c.Status(http.StatusNotFound)
+	c.HTML(http.StatusNotFound, "notfound.html", notFoundData{User: currentUser(c)})
 }
 
 func rows(invoices []*invoice.Invoice) []invoiceRow {

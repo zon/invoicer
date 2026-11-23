@@ -16,7 +16,7 @@ The invoice detail uses the year and month, like `/2027/oct`. The month uses its
 
 The detail is a full page. It shows only that invoice and links back to the invoice list. It links to the invoice PDF, as [PDF](pdf.md) describes. A direct request to an invoice detail URL returns the complete page.
 
-The server returns 404 for an unknown year or month, or a month with no invoice.
+The server returns 404 for an unknown year or month, or a month with no invoice. The 404 response is a complete page that says the invoice was not found and links back to the invoice list.
 
 ## Rendering
 

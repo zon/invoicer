@@ -1,0 +1,12 @@
+{{define "notfound.html"}}<!doctype html>
+<html lang="en">
+{{template "head" .}}
+<body>
+  {{template "header" .}}
+  <section class="not-found">
+    <h2>Not found</h2>
+    <p>There is no invoice at this address.</p>
+    <p class="back"><a href="/">&larr; Back to invoices</a></p>
+  </section>
+</body>
+</html>{{end}}
