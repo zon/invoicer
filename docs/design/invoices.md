@@ -20,6 +20,8 @@ The store assigns an opaque string identifier when it first saves an invoice. It
 
 A week line item records its start date, end date, and hours. Weeks belong to their invoice. The invoice total is the sum of each week's hours times the invoice rate. The system computes the total from stored data and never stores it.
 
+A month holds the weeks whose Wednesday falls in that month. Each week runs Monday through Sunday, so a week can start in the previous month or end in the next. Every week bills the full configured hours per week. For example, January 2025 holds the week starting Monday December 30, 2024, because its Wednesday is January 1. See [Weekly Line Items](../../specs/invoices.md#requirement-weekly-line-items).
+
 The year and month identify an invoice. Generating the same year and month again replaces the stored invoice and keeps its identifier. The new customer, project, rate, and weeks replace the stored values. A paid invoice is not replaced. See [Paid Status](paid-status.md).
 
 ## Store

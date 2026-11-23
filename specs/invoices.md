@@ -66,6 +66,26 @@ A year and month SHALL identify an invoice. The database SHALL hold at most one 
 - THEN the most recently created invoice remains for that month
 - AND the other invoices and their weeks are removed
 
+### Requirement: Weekly Line Items
+The system SHALL assign a week to the month that holds its Wednesday. A week SHALL run Monday through Sunday. Each week SHALL bill the full configured hours per week.
+
+#### Scenario: Week boundaries follow the Wednesday
+- GIVEN January 2025, whose first day is a Wednesday
+- WHEN the system builds the weeks for January 2025
+- THEN the first week runs from Monday December 30, 2024 through Sunday January 5, 2025
+
+#### Scenario: Weeks from adjacent months are excluded
+- GIVEN March 2025, whose first Wednesday is March 5
+- WHEN the system builds the weeks for March 2025
+- THEN no week contains a Wednesday in February 2025
+- AND every week contains a Wednesday in March 2025
+
+#### Scenario: Every week bills full hours
+- GIVEN April 2026 with five Wednesdays and 20 hours per week
+- WHEN the system builds the weeks for April 2026
+- THEN the invoice holds five weeks
+- AND each week bills 20 hours
+
 ### Requirement: Invoice Amount
 An invoice total SHALL be the sum of each week's hours multiplied by the invoice's hourly rate. The system SHALL compute the total from stored data and SHALL NOT store it.
 
