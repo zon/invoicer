@@ -12,17 +12,31 @@ import (
 // Config holds configuration values for invoicer.
 // Only pointer fields are written when explicitly set; nil means "not configured".
 type Config struct {
-	Vendor   string  `yaml:"vendor,omitempty"`
-	Customer string  `yaml:"customer,omitempty"`
-	Rate     float64 `yaml:"rate,omitempty"`
-	Hours    float64 `yaml:"hours,omitempty"`
-	Project  string  `yaml:"project,omitempty"`
-	Database string  `yaml:"database,omitempty"`
+	Vendor        string  `yaml:"vendor,omitempty"`
+	Customer      string  `yaml:"customer,omitempty"`
+	CustomerEmail string  `yaml:"customerEmail,omitempty"`
+	Rate          float64 `yaml:"rate,omitempty"`
+	Hours         float64 `yaml:"hours,omitempty"`
+	Project       string  `yaml:"project,omitempty"`
+	Database      string  `yaml:"database,omitempty"`
 
 	// BaseURL is the public address of the web app.
 	BaseURL string `yaml:"baseUrl,omitempty"`
 	// OIDC holds the web app's access settings.
 	OIDC *OIDC `yaml:"oidc,omitempty"`
+	// Resend holds the email sending settings.
+	Resend *Resend `yaml:"resend,omitempty"`
+}
+
+// Resend holds the settings for sending invoice email through Resend.
+type Resend struct {
+	APIKeyFile string `yaml:"apiKeyFile,omitempty"`
+	From       string `yaml:"from,omitempty"`
+}
+
+// Configured reports whether the config sets any email sending setting.
+func (r *Resend) Configured() bool {
+	return r != nil && (r.APIKeyFile != "" || r.From != "")
 }
 
 // OIDC holds the web app's OpenID Connect settings.
@@ -96,6 +110,9 @@ func Save(path string, updates *Config) error {
 	}
 	if updates.Customer != "" {
 		existing.Customer = updates.Customer
+	}
+	if updates.CustomerEmail != "" {
+		existing.CustomerEmail = updates.CustomerEmail
 	}
 	if updates.Rate != 0 {
 		existing.Rate = updates.Rate

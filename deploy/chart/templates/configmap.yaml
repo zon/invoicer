@@ -8,6 +8,7 @@ data:
   config.yaml: |
     vendor: {{ .Values.config.vendor | quote }}
     customer: {{ .Values.config.customer | quote }}
+    customerEmail: {{ .Values.config.customerEmail | quote }}
     project: {{ .Values.config.project | quote }}
     rate: {{ .Values.config.rate }}
     hours: {{ .Values.config.hours }}
@@ -21,3 +22,8 @@ data:
       adminGroup: {{ .Values.access.adminGroup | quote }}
       customerGroup: {{ .Values.access.customerGroup | quote }}
       groupsClaim: {{ .Values.access.groupsClaim | quote }}
+    {{- if .Values.resend.from }}
+    resend:
+      apiKeyFile: "/run/secrets/resend-api-key"
+      from: {{ .Values.resend.from | quote }}
+    {{- end }}

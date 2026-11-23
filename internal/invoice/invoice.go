@@ -29,12 +29,17 @@ type Invoice struct {
 	Vendor string
 	// Customer is the name of the customer receiving the invoice.
 	Customer string
+	// ContactEmail is the email address that receives the invoice.
+	ContactEmail string
 	// Project is the optional name of the project this invoice is for.
 	Project string
 	// Rate is the hourly rate in dollars.
 	Rate float64
 	// Paid reports whether the customer has paid the invoice.
 	Paid bool
+	// EmailSentAt is when the invoice email was sent. It is zero until a send
+	// succeeds.
+	EmailSentAt time.Time
 	// Weeks is the list of weekly line items.
 	Weeks []Week
 }

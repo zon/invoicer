@@ -15,7 +15,8 @@ import (
 
 func outputID(t *testing.T, out string) string {
 	t.Helper()
-	_, id, ok := strings.Cut(strings.TrimSpace(out), ": ")
+	line, _, _ := strings.Cut(strings.TrimSpace(out), "\n")
+	_, id, ok := strings.Cut(line, ": ")
 	if !ok || id == "" {
 		t.Fatalf("expected an invoice identifier in output %q", out)
 	}
@@ -293,4 +294,257 @@ func TestGenerateMissingRequiredValueStoresNothing(t *testing.T) {
 	if _, err := os.Stat(dbPath); !os.IsNotExist(err) {
 		t.Errorf("expected no database, got err %v", err)
 	}
+}
+
+func TestGenerateStoresContactEmailFromFlag(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "invoices.db")
+	configPath := writeTestConfig(t, "customerEmail: config@acme.com\n")
+
+	cmd := &GenerateCmd{
+		Month:         "january",
+		Year:          2025,
+		Vendor:        "Jane Contractor",
+		Customer:      "Acme Corp",
+		CustomerEmail: "flag@acme.com",
+		Rate:          150,
+		Hours:         40,
+		Database:      dbPath,
+	}
+
+	var out bytes.Buffer
+	if err := cmd.run(configPath, &out); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	got := loadInvoice(t, dbPath, outputID(t, out.String()))
+	if got.ContactEmail != "flag@acme.com" {
+		t.Errorf("ContactEmail: got %q, want the flag value", got.ContactEmail)
+	}
+}
+
+func TestGenerateStoresContactEmailFromConfig(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "invoices.db")
+	configPath := writeTestConfig(t, "customerEmail: config@acme.com\n")
+
+	cmd := &GenerateCmd{
+		Month:    "january",
+		Year:     2025,
+		Vendor:   "Jane Contractor",
+		Customer: "Acme Corp",
+		Rate:     150,
+		Hours:    40,
+		Database: dbPath,
+	}
+
+	var out bytes.Buffer
+	if err := cmd.run(configPath, &out); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	got := loadInvoice(t, dbPath, outputID(t, out.String()))
+	if got.ContactEmail != "config@acme.com" {
+		t.Errorf("ContactEmail: got %q, want the config value", got.ContactEmail)
+	}
+}
+
+func TestGenerateEditStoresNewContactEmail(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "invoices.db")
+	configPath := filepath.Join(dir, "config.yaml")
+
+	first := &GenerateCmd{
+		Month:         "january",
+		Year:          2025,
+		Vendor:        "Jane Contractor",
+		Customer:      "Acme Corp",
+		CustomerEmail: "first@acme.com",
+		Rate:          150,
+		Hours:         40,
+		Database:      dbPath,
+	}
+	var firstOut bytes.Buffer
+	if err := first.run(configPath, &firstOut); err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+
+	second := *first
+	second.CustomerEmail = "second@acme.com"
+	var secondOut bytes.Buffer
+	if err := second.run(configPath, &secondOut); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+
+	if !strings.HasPrefix(secondOut.String(), "Edited invoice for January 2025: ") {
+		t.Errorf("second output: got %q, want an edited invoice", secondOut.String())
+	}
+	id := outputID(t, secondOut.String())
+	if id != outputID(t, firstOut.String()) {
+		t.Fatalf("identifier changed: got %q, want %q", id, outputID(t, firstOut.String()))
+	}
+	got := loadInvoice(t, dbPath, id)
+	if got.ContactEmail != "second@acme.com" {
+		t.Errorf("ContactEmail: got %q, want the new address", got.ContactEmail)
+	}
+}
+
+func TestGenerateWithoutResendSettingsSavesAndSendsNothing(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "invoices.db")
+	configPath := writeTestConfig(t, `customerEmail: billing@acme.com
+baseUrl: https://invoices.example.com
+oidc:
+  issuer: https://auth.example.com
+  clientId: invoicer
+  clientSecretFile: /run/secrets/oidc-client-secret
+  cookieKeyFile: /run/secrets/cookie-key
+`)
+
+	cmd := &GenerateCmd{
+		Month:    "january",
+		Year:     2025,
+		Vendor:   "Jane Contractor",
+		Customer: "Acme Corp",
+		Rate:     150,
+		Hours:    40,
+		Database: dbPath,
+	}
+
+	var out bytes.Buffer
+	if err := cmd.run(configPath, &out); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	id := outputID(t, out.String())
+	want := "Created invoice for January 2025: " + id + "\n"
+	if out.String() != want {
+		t.Errorf("output: got %q, want %q", out.String(), want)
+	}
+
+	got := loadInvoice(t, dbPath, id)
+	if got.ContactEmail != "billing@acme.com" {
+		t.Errorf("ContactEmail: got %q, want the config value", got.ContactEmail)
+	}
+	if !got.EmailSentAt.IsZero() {
+		t.Errorf("EmailSentAt: got %v, want no send time", got.EmailSentAt)
+	}
+}
+
+func TestGenerateWithEmptyResendBlockSavesAndSendsNothing(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "invoices.db")
+	configPath := writeTestConfig(t, "resend: {}\n")
+
+	cmd := &GenerateCmd{
+		Month:    "january",
+		Year:     2025,
+		Vendor:   "Jane Contractor",
+		Customer: "Acme Corp",
+		Rate:     150,
+		Hours:    40,
+		Database: dbPath,
+	}
+
+	var out bytes.Buffer
+	if err := cmd.run(configPath, &out); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !strings.HasPrefix(out.String(), "Created invoice for January 2025: ") {
+		t.Errorf("output: got %q, want a created invoice", out.String())
+	}
+}
+
+func TestGenerateWithIncompleteResendSettingsStoresNothing(t *testing.T) {
+	cases := []struct {
+		name   string
+		config string
+		want   string
+	}{
+		{
+			name: "missing contact email",
+			config: `baseUrl: https://invoices.example.com
+resend:
+  apiKeyFile: /run/secrets/resend-api-key
+  from: invoicer@example.com
+`,
+			want: "customerEmail",
+		},
+		{
+			name: "missing base URL",
+			config: `customerEmail: billing@acme.com
+resend:
+  apiKeyFile: /run/secrets/resend-api-key
+  from: invoicer@example.com
+`,
+			want: "baseUrl",
+		},
+		{
+			name: "missing API key file",
+			config: `customerEmail: billing@acme.com
+baseUrl: https://invoices.example.com
+resend:
+  from: invoicer@example.com
+`,
+			want: "resend.apiKeyFile",
+		},
+		{
+			name: "missing sender",
+			config: `customerEmail: billing@acme.com
+baseUrl: https://invoices.example.com
+resend:
+  apiKeyFile: /run/secrets/resend-api-key
+`,
+			want: "resend.from",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			dbPath := filepath.Join(dir, "invoices.db")
+			configPath := writeTestConfig(t, tc.config)
+
+			cmd := &GenerateCmd{
+				Month:    "january",
+				Year:     2025,
+				Vendor:   "Jane Contractor",
+				Customer: "Acme Corp",
+				Rate:     150,
+				Hours:    40,
+				Database: dbPath,
+			}
+
+			var out bytes.Buffer
+			err := cmd.run(configPath, &out)
+			if err == nil {
+				t.Fatal("expected an error for the incomplete email settings")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error: got %q, want it to contain %q", err, tc.want)
+			}
+			if out.Len() != 0 {
+				t.Errorf("expected no output, got %q", out.String())
+			}
+			if _, err := os.Stat(dbPath); !os.IsNotExist(err) {
+				t.Errorf("expected no database, got err %v", err)
+			}
+		})
+	}
+}
+
+// loadInvoice opens the store at dbPath and loads the invoice with id.
+func loadInvoice(t *testing.T, dbPath, id string) *invoice.Invoice {
+	t.Helper()
+	s, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open store: %v", err)
+	}
+	defer s.Close()
+
+	got, err := s.Get(strings.ToLower(id))
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	return got
 }

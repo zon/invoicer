@@ -16,6 +16,9 @@
 - path: internal/config
   description: Reads and writes the user config file.
 
+- path: internal/email
+  description: Builds and sends invoice email messages.
+
 - path: internal/invoice
   description: Computes invoice months, weeks, and totals.
 

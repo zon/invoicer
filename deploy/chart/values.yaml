@@ -10,10 +10,16 @@ publicURL: https://invoices.haralovich.com
 config:
   vendor: Jane Smith
   customer: Acme Corp
+  customerEmail: billing@acme.com
   project: Website Redesign
   rate: 150
   hours: 40
   database: /data/invoices.db
+
+resend:
+  from: invoicer@example.com
+  secretName: invoicer-resend
+  apiKeyKey: api-key
 
 access:
   issuer: https://id.haralovich.org

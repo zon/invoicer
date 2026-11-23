@@ -41,6 +41,15 @@ spec:
           - name: data
             persistentVolumeClaim:
               claimName: {{ include "invoicer.dataClaimName" . }}
+          {{- if .Values.resend.from }}
+          - name: resend-secrets
+            secret:
+              secretName: {{ .Values.resend.secretName }}
+              defaultMode: 0444
+              items:
+                - key: {{ .Values.resend.apiKeyKey | default "api-key" }}
+                  path: resend-api-key
+          {{- end }}
         container:
           image: {{ include "invoicer.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -57,4 +66,10 @@ spec:
               readOnly: true
             - name: data
               mountPath: /data
+            {{- if .Values.resend.from }}
+            - name: resend-secrets
+              mountPath: /run/secrets/resend-api-key
+              subPath: resend-api-key
+              readOnly: true
+            {{- end }}
 {{- end }}

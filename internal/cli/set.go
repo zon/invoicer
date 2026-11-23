@@ -21,6 +21,9 @@ type SetConfigCmd struct {
 	// Customer is the name of the customer receiving the invoice.
 	Customer string `help:"Name of the customer receiving the invoice."`
 
+	// CustomerEmail is the address that receives the invoice email.
+	CustomerEmail string `help:"Email address that receives the invoice email."`
+
 	// Project is an optional project name to annotate invoices with.
 	Project string `help:"Name of the project to annotate invoices with."`
 
@@ -53,12 +56,13 @@ func RunSetConfig(s *SetConfigCmd, path string) error {
 	}
 
 	updates := &config.Config{
-		Vendor:   s.Vendor,
-		Customer: s.Customer,
-		Rate:     s.Rate,
-		Hours:    s.Hours,
-		Project:  s.Project,
-		Database: s.Database,
+		Vendor:        s.Vendor,
+		Customer:      s.Customer,
+		CustomerEmail: s.CustomerEmail,
+		Rate:          s.Rate,
+		Hours:         s.Hours,
+		Project:       s.Project,
+		Database:      s.Database,
 	}
 
 	if err := config.Save(path, updates); err != nil {

@@ -53,6 +53,9 @@ type GenerateCmd struct {
 	// Customer is the name of the customer receiving the invoice.
 	Customer string `short:"c" help:"Name of the customer receiving the invoice. Required without config."`
 
+	// CustomerEmail is the address that receives the invoice email.
+	CustomerEmail string `help:"Email address that receives the invoice email. Defaults to the customerEmail config value."`
+
 	// Project is an optional project name to annotate the invoice with.
 	Project string `help:"Name of the project to annotate the invoice with."`
 
@@ -91,6 +94,11 @@ func (c *GenerateCmd) resolveOptions(configPath string) (*ResolvedOptions, error
 		opts.Customer = cfg.Customer
 	}
 
+	opts.CustomerEmail = c.CustomerEmail
+	if opts.CustomerEmail == "" {
+		opts.CustomerEmail = cfg.CustomerEmail
+	}
+
 	opts.Project = c.Project
 	if opts.Project == "" {
 		opts.Project = cfg.Project
@@ -112,6 +120,9 @@ func (c *GenerateCmd) resolveOptions(configPath string) (*ResolvedOptions, error
 	if err != nil {
 		return nil, err
 	}
+
+	opts.BaseURL = cfg.BaseURL
+	opts.Resend = cfg.Resend
 
 	return opts, nil
 }
@@ -150,14 +161,38 @@ func databasePath(flag string, cfg *config.Config) (string, error) {
 
 // ResolvedOptions holds the final merged values after CLI and config are combined.
 type ResolvedOptions struct {
-	Month    string
-	Year     int
-	Vendor   string
-	Customer string
-	Project  string
-	Rate     float64
-	Hours    float64
-	Database string
+	Month         string
+	Year          int
+	Vendor        string
+	Customer      string
+	CustomerEmail string
+	Project       string
+	Rate          float64
+	Hours         float64
+	Database      string
+	BaseURL       string
+	Resend        *config.Resend
+}
+
+// validateEmailSettings reports the first missing email setting when the
+// config turns on email sending.
+func validateEmailSettings(opts *ResolvedOptions) error {
+	if !opts.Resend.Configured() {
+		return nil
+	}
+	if opts.CustomerEmail == "" {
+		return fmt.Errorf("customerEmail is required (use --customer-email or set in config) when resend is configured")
+	}
+	if opts.BaseURL == "" {
+		return fmt.Errorf("baseUrl is required in the config when resend is configured")
+	}
+	if opts.Resend.APIKeyFile == "" {
+		return fmt.Errorf("resend.apiKeyFile is required when resend is configured")
+	}
+	if opts.Resend.From == "" {
+		return fmt.Errorf("resend.from is required when resend is configured")
+	}
+	return nil
 }
 
 // Run executes the generate subcommand (invoice generation).
@@ -185,6 +220,9 @@ func (c *GenerateCmd) run(configPath string, out io.Writer) error {
 	if opts.Hours == 0 {
 		return fmt.Errorf("hours is required (use --hours or set in config)")
 	}
+	if err := validateEmailSettings(opts); err != nil {
+		return err
+	}
 
 	// Resolve month and year.
 	month, year, err := invoice.ResolveMonthYear(opts.Month, opts.Year, invoice.Now())
@@ -193,13 +231,14 @@ func (c *GenerateCmd) run(configPath string, out io.Writer) error {
 	}
 
 	inv := &invoice.Invoice{
-		Month:    month,
-		Year:     year,
-		Vendor:   opts.Vendor,
-		Customer: opts.Customer,
-		Project:  opts.Project,
-		Rate:     opts.Rate,
-		Weeks:    invoice.WeeksForMonth(year, month, opts.Hours),
+		Month:        month,
+		Year:         year,
+		Vendor:       opts.Vendor,
+		Customer:     opts.Customer,
+		ContactEmail: opts.CustomerEmail,
+		Project:      opts.Project,
+		Rate:         opts.Rate,
+		Weeks:        invoice.WeeksForMonth(year, month, opts.Hours),
 	}
 
 	s, err := store.Open(opts.Database)
@@ -221,5 +260,17 @@ func (c *GenerateCmd) run(configPath string, out io.Writer) error {
 		action = "Created"
 	}
 	fmt.Fprintf(out, "%s invoice for %s %d: %s\n", action, month.String(), year, strings.ToUpper(id))
-	return nil
+
+	if !opts.Resend.Configured() {
+		return nil
+	}
+
+	stored, err := s.Get(id)
+	if err != nil {
+		return fmt.Errorf("loading saved invoice: %w", err)
+	}
+	if !stored.EmailSentAt.IsZero() {
+		return nil
+	}
+	return sendInvoice(out, s, stored, opts)
 }

@@ -7,6 +7,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/gorilla/securecookie v1.1.2
+	github.com/resend/resend-go/v4 v4.13.0
 	github.com/signintech/gopdf v0.38.6
 	golang.org/x/oauth2 v0.36.0
 	gopkg.in/yaml.v3 v3.0.1
