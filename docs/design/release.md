@@ -18,6 +18,10 @@ The command reads the remote commit, not the working tree, so the tag matches th
 
 The command fails before it tags when `VERSION` is missing or not `MAJOR.MINOR.PATCH`, when the chart `appVersion` differs, or when the tag exists on the remote.
 
+## Automatic Release
+
+A push to `main` releases when `VERSION` names an untagged version. The release workflow reads `VERSION` from the pushed commit and skips when the tag exists on the remote. Otherwise it tags the commit and calls the build, so a version bump releases without a manual step.
+
 ## Binary
 
 The build stamps the app version into the binary. `invoicer --version` prints it.
@@ -38,7 +42,7 @@ The chart has its own SemVer `version`. Helm requires a new chart version for ev
 
 The chart `appVersion` is the app version of the image the chart defaults to. An empty `image.tag` uses it, as [Chart](chart.md) describes. A chart-only fix keeps `appVersion` and defaults to the last released image.
 
-A release publishes the chart package from the tagged commit. A chart-only fix publishes a package from its own commit.
+A release publishes the chart package from the tagged commit. A chart-only fix ships in the next release, because only a tag builds.
 
 ## Artifacts
 

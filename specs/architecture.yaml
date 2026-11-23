@@ -1,5 +1,5 @@
 - path: .github/workflows
-  description: Builds, scans, and publishes the container image and chart.
+  description: Tags unreleased versions on main and builds, scans, and publishes them.
 
 - path: deploy/chart
   description: Deploys the web app to Kubernetes with Helm.
