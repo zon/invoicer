@@ -1,17 +1,17 @@
 # Chart Specification
 
 ## Purpose
-The Helm chart deploys the web app on the lab cluster.
+The Helm chart deploys the web app and the monthly schedule on the lab cluster.
 
 ## Requirements
 
 ### Requirement: Chart Location and Install
-The chart SHALL live at `deploy/chart` and SHALL deploy the [container image](container.md). It SHALL install into an existing `invoicer` namespace and SHALL NOT create the namespace. A default install with the required Secret SHALL produce the web Deployment, Service, PersistentVolumeClaim, Ingress, and Certificate.
+The chart SHALL live at `deploy/chart` and SHALL deploy the [container image](container.md). It SHALL install into an existing `invoicer` namespace and SHALL NOT create the namespace. A default install with the required Secret and Argo Workflows SHALL produce the web Deployment, Service, PersistentVolumeClaim, Ingress, Certificate, and CronWorkflow.
 
 #### Scenario: Default install
-- GIVEN the `invoicer` namespace and the required Secret
+- GIVEN the `invoicer` namespace, the required Secret, and Argo Workflows
 - WHEN the chart installs with default values
-- THEN it creates a web Deployment, Service, claim, Ingress, and Certificate
+- THEN it creates a web Deployment, Service, claim, Ingress, Certificate, and CronWorkflow
 
 #### Scenario: Missing namespace
 - GIVEN a cluster without the `invoicer` namespace
@@ -20,7 +20,9 @@ The chart SHALL live at `deploy/chart` and SHALL deploy the [container image](co
 - AND the chart does not create the namespace
 
 ### Requirement: Values
-The chart SHALL accept `image`, `hostname`, `publicURL`, `config`, `access`, `data`, `service`, `ingress`, `certificate`, and `resources`. An empty `image.tag` SHALL use the chart app version. The chart SHALL attach every `image.pullSecrets` entry to the pod. The chart version and app version SHALL follow [Release](release.md).
+The chart SHALL accept `image`, `hostname`, `publicURL`, `config`, `access`, `data`, `schedule`, `service`, `ingress`, `certificate`, and `resources`. An empty `image.tag` SHALL use the chart app version. The chart SHALL attach every `image.pullSecrets` entry to each pod. The chart version and app version SHALL follow [Release](release.md).
+
+`schedule.enabled` SHALL default to true. `schedule.cron` SHALL default to `0 9 1 * *`.
 
 #### Scenario: Default image tag
 - GIVEN an empty `image.tag`
@@ -126,6 +128,41 @@ The chart SHALL set a grace period that covers the web app's shutdown timeout, a
 - GIVEN a set `resources` request and limit
 - WHEN the chart renders
 - THEN the web container uses them
+
+### Requirement: Schedule Workload
+The chart SHALL render one CronWorkflow in the `invoicer` namespace when `schedule.enabled` is true and SHALL render none when it is false. The CronWorkflow SHALL use `schedule.cron` in UTC and SHALL allow one run at a time.
+
+The workflow SHALL run one pod from the [container image](container.md) with the `generate` argument. The pod SHALL mount the config file and the data claim as the web pod does. It SHALL attach every `image.pullSecrets` entry and SHALL use the web pod's security context and `resources`. It SHALL use pod affinity to run on the web pod's node.
+
+The CronWorkflow SHALL retry a failed pod twice. It SHALL remove a successful run after one day and SHALL keep a failed run.
+
+The chart SHALL NOT install Argo Workflows.
+
+#### Scenario: Default schedule
+- GIVEN default values
+- WHEN the chart renders
+- THEN one CronWorkflow uses `0 9 1 * *` in UTC
+- AND it allows one run at a time
+
+#### Scenario: Disabled schedule
+- GIVEN `schedule.enabled` is false
+- WHEN the chart renders
+- THEN the chart creates no CronWorkflow
+
+#### Scenario: Cron override
+- GIVEN `schedule.cron` is `30 6 2 * *`
+- WHEN the chart renders
+- THEN the CronWorkflow uses that time in UTC
+
+#### Scenario: Schedule pod
+- GIVEN an enabled schedule
+- WHEN the workflow renders
+- THEN its pod runs `generate`
+- AND it mounts the config file and the data claim
+- AND it names every pull secret
+- AND it uses user and group 1000
+- AND it uses the configured resources
+- AND it runs on the web pod's node
 
 ### Requirement: Service
 The chart SHALL create a ClusterIP Service on `service.port` that forwards to 8080.

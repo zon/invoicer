@@ -102,6 +102,8 @@ An invoice total SHALL be the sum of each week's hours multiplied by the invoice
 ### Requirement: Generate Output
 Generating an invoice SHALL save it and print whether the invoice was created or edited, the invoice's month and year, and its identifier. Generate SHALL NOT print file paths or report HTML or PDF output.
 
+Generate SHALL default to the previous calendar month in UTC.
+
 When the stored invoice for the month is paid, generate SHALL report that the invoice is paid, store nothing, and exit non-zero.
 
 #### Scenario: Successful generation
@@ -109,6 +111,11 @@ When the stored invoice for the month is paid, generate SHALL report that the in
 - WHEN a new invoice is generated
 - THEN the system stores the invoice
 - AND the output reports that it was created, with the month, year, and identifier
+
+#### Scenario: Default month
+- GIVEN no month or year
+- WHEN generate runs on 1 April 2026
+- THEN it generates the invoice for March 2026
 
 #### Scenario: Paid invoice blocks generate
 - GIVEN a stored paid invoice
