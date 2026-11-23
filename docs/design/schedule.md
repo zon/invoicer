@@ -24,17 +24,12 @@ Both pods mount one filesystem, so SQLite's file locks keep the writers apart. T
 
 ## Repeat
 
-A run for a month that holds an invoice edits the stored invoice. It updates the vendor, customer, rate, and weeks from the config and keeps the identifier and the stored project. A second run never stores a duplicate.
+A run for a month that holds an invoice edits the stored invoice. It updates the vendor, customer, contact email, rate, and weeks from the config and keeps the identifier and the stored project. A second run never stores a duplicate.
+
+A retry sends the email when an earlier run stored the invoice without sending it, as [Email](email.md) describes.
 
 A run for a paid month fails and changes nothing. Argo shows the failure.
 
 ## Failure
 
-The workflow retries a failed pod twice. A failed run changes nothing, so a retry is safe. A month that still fails waits for a manual run.
-
-## Out of Scope
-
-* Invoice email
-* Months older than the previous one, which a manual run fills
-* Installing Argo Workflows
-* Changing the database engine
+The workflow retries a failed pod twice. A failed save changes nothing. A failed send leaves the invoice stored, and the retry sends it. A month that still fails waits for a manual run.

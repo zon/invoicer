@@ -25,12 +25,3 @@ A POST for an unknown year or month returns 404. A POST for a paid invoice retur
 ## Safety
 
 The edit route accepts only POST. The session cookie is SameSite=Lax, so a browser leaves it out of a cross-site form post. The app needs no separate token for the edit.
-
-## Out of Scope
-
-* Editing other invoice fields
-* Editing from the invoice list
-* A project history or audit trail
-* Conflict detection when two users edit one invoice
-* Restricting a customer user to their own invoices
-* JavaScript

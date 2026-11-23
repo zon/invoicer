@@ -31,10 +31,3 @@ A failed render responds with an error and sends no partial document.
 ## Missing Invoice
 
 An unknown year, an unknown month, or a month with no stored invoice returns 404, like the detail page.
-
-## Out of Scope
-
-* Storing generated PDFs
-* Emailing PDFs. Invoice email is a later milestone.
-* Custom layouts, logos, and branding
-* Digital signatures

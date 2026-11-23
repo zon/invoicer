@@ -8,6 +8,7 @@ An invoice records one customer's work for one calendar month:
 
 * vendor
 * customer
+* customer contact email
 * project, when set
 * year and month
 * hourly rate
@@ -38,18 +39,12 @@ The path comes from the `database` config value or the `--database` flag. The fl
 
 ## Generate
 
-Generate resolves its options, builds the week line items, and saves the invoice and its weeks in one transaction. It then prints the invoice identifier.
+Generate resolves its options, builds the week line items, and saves the invoice and its weeks in one transaction. It then prints the invoice identifier and sends the email, as [Email](email.md) describes.
 
 The monthly [schedule](schedule.md) runs the same generate from an Argo workflow.
 
-Generate writes no files and generates no HTML. A failed save leaves the previous invoice unchanged and reports an error. A paid invoice is not edited, so generate for its month reports an error and stores nothing.
+Generate writes no files, generates no HTML, and attaches no PDF. A failed save leaves the previous invoice unchanged and reports an error. A failed send leaves the invoice stored and reports an error. A paid invoice is not edited, so generate for its month reports an error and stores nothing.
 
 ## Remove
 
 Remove deletes an invoice and its weeks by identifier in one transaction. Generate prints identifiers in uppercase, so remove accepts either case. A paid invoice can be removed because the paid lock covers generated values and the project, not deletion. See [Invoice Removal](../../specs/invoices.md#requirement-invoice-removal).
-
-## Out of Scope
-
-* Importing existing invoice files.
-* Rendering stored invoices as HTML. The [web app](web.md) renders them.
-* Customer records.

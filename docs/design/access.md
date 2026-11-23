@@ -81,13 +81,3 @@ The callback address is `baseUrl` plus `/callback`.
 The app is an OIDC client. At startup it reads the provider's discovery document from the issuer and fails when the issuer is unreachable or the document lacks the authorization, token, or JWKS endpoints.
 
 Tokens are validated against the provider's published keys. The app uses the authorization code flow with PKCE and asks for no refresh token.
-
-## Out of Scope
-
-* Serving several customers
-* Mapping groups to customers
-* Roles other than admin user and customer user
-* Refresh tokens and offline access
-* Provider-initiated sign-out
-* API tokens
-* Other writes from the web app

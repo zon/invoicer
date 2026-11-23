@@ -28,9 +28,3 @@ The image contains no config, database, or secret. A run without mounts uses the
 ## Local Use
 
 Podman builds the image from the repository root. A local run mounts a config file and a data directory, as the [chart](chart.md) does. `podman run` with no mounts generates an invoice from flags.
-
-## Out of Scope
-
-* Publishing image tags, which belong to [Release](release.md)
-* Vulnerability scanning, which belongs to [Build](build.md)
-* Deployment manifests, which belong to the [chart](chart.md)

@@ -49,9 +49,3 @@ A release publishes the chart package from the tagged commit. A chart-only fix s
 ## Artifacts
 
 One release tag builds the binary, image, and chart from the tagged commit. The binary version, image version tag, and chart `appVersion` are the same app version. The chart `version` identifies the chart package.
-
-## Out of Scope
-
-* Build, which belongs to [Build](build.md)
-* Deployment, which belongs to the lab repository
-* Registry credentials

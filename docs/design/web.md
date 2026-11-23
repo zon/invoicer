@@ -14,7 +14,7 @@ Selecting an invoice opens its detail page.
 
 The invoice detail uses the year and month, like `/2027/oct`. The month uses its three-letter lowercase name. The detail shows the vendor, customer, project, month, year, invoice identifier, hourly rate, weekly line items, paid status, and total. Each weekly line item shows its date range and hours. The project is editable while the invoice is unpaid, as [Project Edits](project-edits.md) describes. A paid invoice shows no project form. An admin user changes the paid status, as [Paid Status](paid-status.md) describes.
 
-The detail is a full page. It shows only that invoice and links back to the invoice list. It links to the invoice PDF, as [PDF](pdf.md) describes. A direct request to an invoice detail URL returns the complete page.
+The detail is a full page. It shows only that invoice and links back to the invoice list. It links to the invoice PDF, as [PDF](pdf.md) describes. The invoice email links to this page, as [Email](email.md) describes. A direct request to an invoice detail URL returns the complete page.
 
 The server returns 404 for an unknown year or month, or a month with no invoice. The 404 response is a complete page that says the invoice was not found and links back to the invoice list.
 
@@ -37,9 +37,3 @@ The web app reads through the store. The store lists every invoice with its week
 ## Server
 
 `invoicer web` starts the server. The database path comes from `--database`, then the config file, then the default, as [Config](config.md) describes. `--address` sets the listen address and defaults to `:8080`. The server shuts down gracefully on an interrupt.
-
-## Out of Scope
-
-* Invoice email
-* Writes other than the project edit and the paid status
-* Containers and deployment

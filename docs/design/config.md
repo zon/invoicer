@@ -8,12 +8,13 @@ Config holds these values:
 
 * `vendor` — name of the contractor sending invoices
 * `customer` — name of the customer receiving invoices
+* `customerEmail` — contact email of the customer receiving invoices
 * `project` — optional project name
 * `rate` — hourly rate in dollars
 * `hours` — hours worked per week
 * `database` — path to the invoice database
 
-`database` defaults to `~/.invoicer/invoices.db`. The other values have no default. Generate requires `vendor`, `customer`, `rate`, and `hours` from a flag or config. `project` may be empty.
+`database` defaults to `~/.invoicer/invoices.db`. The other values have no default. Generate requires `vendor`, `customer`, `rate`, and `hours` from a flag or config. `project` may be empty. `customerEmail` is optional unless email sending is configured, as [Email](#email) describes.
 
 ## Order
 
@@ -32,6 +33,7 @@ A missing or zero `rate` or `hours` is unset. Generate ignores unknown config ke
 ```yaml
 vendor: Jane Smith
 customer: Acme Corp
+customerEmail: billing@acme.com
 project: Website Redesign
 rate: 150
 hours: 40
@@ -40,10 +42,33 @@ database: /var/lib/invoicer/invoices.db
 
 The config path is fixed. Generate does not write the file.
 
+## Email
+
+`customerEmail` is the customer's contact email. Generate stores it on the invoice, as [Email](email.md#address) describes.
+
+Email sending is optional. When the config sets no `resend` value, generate sends nothing. When it sets any, generate needs `customerEmail`, `baseUrl`, `resend.apiKeyFile`, and `resend.from`. Generate fails before it saves when one is missing.
+
+```yaml
+customerEmail: billing@acme.com
+baseUrl: https://invoices.example.com
+resend:
+  apiKeyFile: /run/secrets/resend-api-key
+  from: invoicer@example.com
+```
+
+The `resend` block holds:
+
+* `apiKeyFile` — path to a readable file with the Resend API key
+* `from` — sender address on a verified Resend domain
+
+The API key lives in a file, like [Access](access.md#configuration) describes. The config names only the path.
+
 ## Set Config
 
 `invoicer set config` writes values to the config file. It accepts the same options as generate, without the month and year arguments.
 
 Only provided flags update the file. The other values stay the same. The command creates `~/.invoicer` and the file when they do not exist.
+
+`set config` writes `customerEmail` through its flag. It does not write the `resend` block. Edit the file to configure email sending.
 
 `set config` cannot clear a value. Edit the file to remove one.

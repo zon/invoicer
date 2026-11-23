@@ -11,6 +11,8 @@ The web app also renders invoice PDFs in-process with gopdf. Rendering needs no 
 * [Go](https://go.dev/)
 * [Gin](https://gin-gonic.com/)
 * [gopdf](https://github.com/signintech/gopdf)
+* [Resend](https://resend.com/) (invoice email)
+* [Resend Go SDK](https://github.com/resend/resend-go) (invoice email)
 * [Kong](https://github.com/alecthomas/kong)
 * [yaml.v3](https://pkg.go.dev/gopkg.in/yaml.v3)
 * [GORM](https://gorm.io/)

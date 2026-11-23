@@ -17,10 +17,16 @@ publicURL: https://invoices.haralovich.com
 config:
   vendor: Jane Smith
   customer: Acme Corp
+  customerEmail: billing@acme.com
   project: Website Redesign
   rate: 150
   hours: 40
   database: /data/invoices.db
+
+resend:
+  from: invoicer@example.com
+  secretName: invoicer-resend
+  apiKeyKey: api-key
 
 access:
   issuer: https://id.haralovich.org
@@ -66,13 +72,15 @@ An empty `image.tag` uses the chart app version. The chart attaches named pull s
 
 ## Config
 
-The chart renders one config file from `config`, `publicURL`, and the access settings. It mounts the file read-only at the image config path, `/home/invoicer/.invoicer/config.yaml`.
+The chart renders one config file from `config`, `publicURL`, the access settings, and the Resend settings. It mounts the file read-only at the image config path, `/home/invoicer/.invoicer/config.yaml`.
 
-The config holds `vendor`, `customer`, `project`, `rate`, `hours`, and `database`, as [Config](config.md) describes. It also holds `baseUrl` and the `oidc` settings, as [Access](access.md#configuration) describes. `baseUrl` comes from `publicURL`. `database` defaults to `/data/invoices.db`.
+The config holds `vendor`, `customer`, `customerEmail`, `project`, `rate`, `hours`, and `database`, as [Config](config.md) describes. It also holds `baseUrl` and the `oidc` settings, as [Access](access.md#configuration) describes. `baseUrl` comes from `publicURL`. `database` defaults to `/data/invoices.db`.
 
-The config names the mounted paths `/run/secrets/oidc-client-secret` and `/run/secrets/cookie-key`.
+When `resend.from` is set, the config holds the `resend` block, as [Email](email.md#configuration) describes. The schedule pod mounts the API key at `/run/secrets/resend-api-key`. The web pod does not send email and mounts no Resend secret.
 
-The chart does not hold secrets. It mounts the client secret and cookie key from the existing Secret named by `access.secretName` at those paths. The keys default to `client-secret` and `cookie-key`, which the lab's `scripts/invoicer-oidc-secret.sh` writes.
+The config names the mounted paths `/run/secrets/oidc-client-secret` and `/run/secrets/cookie-key`. When it sets Resend, it also names `/run/secrets/resend-api-key`.
+
+The chart does not hold secrets. It mounts the client secret and cookie key from the existing Secret named by `access.secretName` at those paths. The keys default to `client-secret` and `cookie-key`, which the lab's `scripts/invoicer-oidc-secret.sh` writes. It mounts the Resend API key from the existing Secret named by `resend.secretName`, with key `resend.apiKeyKey`.
 
 The chart owns the config file. A deployment does not use `invoicer set config`.
 
@@ -115,11 +123,3 @@ The chart creates a cert-manager Certificate for `hostname` with the `lets-encry
 The lab Terraform owns the DNS record for `hostname`.
 
 `publicURL` is the public address of the web app. Its host is `hostname`. The OIDC client registers `publicURL` plus `/callback` as the callback address.
-
-## Out of Scope
-
-* Building and publishing the image, which belongs to [Build](build.md)
-* Vulnerability scanning, which belongs to [Build](build.md)
-* DNS records
-* TLS certificates outside cert-manager
-* Database backups

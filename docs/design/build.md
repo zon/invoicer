@@ -37,11 +37,3 @@ The package goes to `oci://ghcr.io/zon/charts` as `invoicer`. A published chart 
 CI uses the workflow `GITHUB_TOKEN` with package write permission. The build needs no other secret.
 
 A tag pushed with `GITHUB_TOKEN` starts no workflow, so the release workflow calls the build directly. A tag pushed by hand starts the build through the tag trigger.
-
-## Out of Scope
-
-* Deploying the chart, which belongs to the lab repository
-* Release numbering, which belongs to [Release](release.md)
-* A standalone binary download
-* Image signing and provenance
-* The monthly schedule

@@ -39,11 +39,3 @@ A POST for an unknown year or month returns 404. A `paid` value other than `true
 ## Safety
 
 The paid route accepts only POST. The session cookie is SameSite=Lax, so a browser leaves it out of a cross-site form post. The app needs no separate token for the change.
-
-## Out of Scope
-
-* The payment date
-* Partial payments and amounts paid
-* A payment history or audit trail
-* Changing the status from the invoice list
-* Changing the status from the CLI
