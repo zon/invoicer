@@ -208,20 +208,34 @@ func TestResolveMonthYear_ExplicitMonth(t *testing.T) {
 	}
 }
 
-func TestResolveMonthYear_ClosestYear(t *testing.T) {
-	// If month is given but not year, pick the closest year.
-	// Today is March 2025. "November" without a year: Nov 2024 is ~4 months ago,
-	// Nov 2025 is ~8 months away → 2024 is closer.
-	now := time.Date(2025, time.March, 15, 0, 0, 0, 0, time.UTC)
-	month, year, err := invoice.ResolveMonthYear("november", 0, now)
+func TestResolveMonthYear_ExplicitMonthDefaultsCurrentYear(t *testing.T) {
+	// An explicit month without a year uses the current year, even when that
+	// month is ahead of today.
+	now := time.Date(2025, time.November, 15, 0, 0, 0, 0, time.UTC)
+	month, year, err := invoice.ResolveMonthYear("may", 0, now)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if month != time.November {
-		t.Errorf("expected November, got %v", month)
+	if month != time.May {
+		t.Errorf("expected May, got %v", month)
 	}
-	if year != 2024 {
-		t.Errorf("expected 2024 (closest), got %d", year)
+	if year != 2025 {
+		t.Errorf("expected 2025, got %d", year)
+	}
+}
+
+func TestResolveMonthYear_DefaultsPreviousMonthOnShortMonth(t *testing.T) {
+	// March 31 → previous month is February, not the normalized March 3.
+	now := time.Date(2025, time.March, 31, 0, 0, 0, 0, time.UTC)
+	month, year, err := invoice.ResolveMonthYear("", 0, now)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if month != time.February {
+		t.Errorf("expected February, got %v", month)
+	}
+	if year != 2025 {
+		t.Errorf("expected 2025, got %d", year)
 	}
 }
 

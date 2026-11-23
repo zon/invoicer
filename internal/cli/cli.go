@@ -43,8 +43,9 @@ type GenerateCmd struct {
 	// Month is the month to invoice for (text or numeric). Defaults to previous month.
 	Month string `arg:"" optional:"" help:"Month to invoice for (e.g. 'january', 'jan', or '1'). Defaults to previous month."`
 
-	// Year is the year of the month to invoice for. Defaults to the year closest to the given month.
-	Year int `arg:"" optional:"" help:"Year of the month to invoice for. Defaults to the year closest to the given month."`
+	// Year is the year of the month to invoice for. Defaults to the current year,
+	// except the previous-month default at a year boundary.
+	Year int `arg:"" optional:"" help:"Year of the month to invoice for. Defaults to the current year, except the previous-month default at a year boundary."`
 
 	// Vendor is the name of the contractor sending the invoice.
 	Vendor string `short:"v" help:"Name of the contractor sending the invoice. Required without config."`

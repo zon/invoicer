@@ -21,7 +21,7 @@ invoicer [<month> [<year>]] [options]
 | Argument | Description |
 |----------|-------------|
 | `month`  | Month to invoice for. Accepts full name (`january`), abbreviation (`jan`), or numeric (`1`–`12`). Defaults to the previous calendar month. |
-| `year`   | Year of the invoice month. Defaults to the year closest to the given month. |
+| `year`   | Year of the invoice month. Defaults to the current year, except when the month is omitted and the previous month is December, which uses the prior year. |
 
 ### Options
 
