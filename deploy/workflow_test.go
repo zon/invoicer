@@ -330,6 +330,36 @@ func TestWorkflowPublishesMainPushToRegistry(t *testing.T) {
 	}
 }
 
+func TestWorkflowLabelsTheImage(t *testing.T) {
+	steps := pipelineSteps(t, loadWorkflow(t))
+
+	build := stepIndexMatching(steps, buildsImage)
+	if build < 0 {
+		t.Fatal("workflow does not build the image")
+	}
+	labels := imageLabels(steps[build].Run)
+
+	for _, check := range []struct {
+		key  string
+		uses []string
+	}{
+		{key: "org.opencontainers.image.version", uses: []string{"scripts/version.sh"}},
+		{key: "org.opencontainers.image.revision", uses: []string{"GITHUB_SHA"}},
+		{key: "org.opencontainers.image.source", uses: []string{"GITHUB_SERVER_URL", "GITHUB_REPOSITORY"}},
+		{key: "org.opencontainers.image.created", uses: []string{"date -u", "%Y-%m-%dT%H:%M:%SZ"}},
+	} {
+		value, ok := labels[check.key]
+		if !ok {
+			t.Fatalf("built image has no %s label:\n%s", check.key, steps[build].Run)
+		}
+		for _, use := range check.uses {
+			if !strings.Contains(value, use) {
+				t.Fatalf("%s label %q does not use %s", check.key, value, use)
+			}
+		}
+	}
+}
+
 func TestWorkflowPublishesNoLatestTag(t *testing.T) {
 	for _, job := range loadWorkflow(t).Jobs {
 		for _, step := range job.Steps {
@@ -430,6 +460,20 @@ func builtImageTag(run string) string {
 		}
 	}
 	return ""
+}
+
+// imageLabels returns the labels a build command applies, keyed by label name.
+func imageLabels(run string) map[string]string {
+	labels := make(map[string]string)
+	label := regexp.MustCompile(`--label\s+(?:"([^"]*)"|'([^']*)'|(\S+))`)
+	for _, match := range label.FindAllStringSubmatch(run, -1) {
+		key, value, ok := strings.Cut(match[1]+match[2]+match[3], "=")
+		if !ok {
+			continue
+		}
+		labels[key] = value
+	}
+	return labels
 }
 
 // savedArchive returns the archive path a save command writes.
