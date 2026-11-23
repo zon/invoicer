@@ -1,3 +1,6 @@
+- path: .github/workflows
+  description: Builds, scans, and publishes the container image and chart.
+
 - path: deploy/chart
   description: Deploys the web app to Kubernetes with Helm.
 
