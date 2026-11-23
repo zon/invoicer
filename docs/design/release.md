@@ -8,7 +8,15 @@ Releases use Semantic Versioning. A release tag is `vMAJOR.MINOR.PATCH` on `main
 
 While the major version is 0, a breaking change bumps minor and every other change bumps patch. From 1.0, the usual SemVer rules apply.
 
-The tag is the app version source. The release commit sets the chart `appVersion` from the tag. A release fails when the two differ, so the chart defaults to the released image.
+The `VERSION` file at the repo root holds the app version, such as `0.2.0`. The release commit sets `VERSION` and the chart `appVersion`. A release fails when the two differ, so the chart defaults to the released image.
+
+## Release Command
+
+`just release` starts a release. It fetches `origin/main` and reads `VERSION` from that commit. It tags the commit `v<version>` and pushes the tag. The tag starts the build, as [Build](build.md) describes.
+
+The command reads the remote commit, not the working tree, so the tag matches the commit it names. Local changes and the current branch do not matter.
+
+The command fails before it tags when `VERSION` is missing or not `MAJOR.MINOR.PATCH`, when the chart `appVersion` differs, or when the tag exists on the remote.
 
 ## Binary
 

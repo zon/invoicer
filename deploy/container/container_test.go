@@ -50,6 +50,15 @@ func TestContainerfileRunsInvoicerWithArguments(t *testing.T) {
 	}
 }
 
+func buildStage(t *testing.T, containerfile string) string {
+	t.Helper()
+	stages := strings.Split(containerfile, "\nFROM ")
+	if len(stages) < 2 {
+		t.Fatal("Containerfile has no build stage")
+	}
+	return stages[0]
+}
+
 func runtimeStage(t *testing.T, containerfile string) string {
 	t.Helper()
 	stages := strings.Split(containerfile, "\nFROM ")
@@ -82,7 +91,7 @@ func apkPackages(stage string) []string {
 func TestContainerfileBuildsSQLiteWithoutRuntimeToolchain(t *testing.T) {
 	root := repoRoot(t)
 	containerfile := readFile(t, filepath.Join(root, "deploy", "container", "Containerfile"))
-	build := strings.Split(containerfile, "\nFROM ")[0]
+	build := buildStage(t, containerfile)
 	runtime := runtimeStage(t, containerfile)
 
 	buildPackages := apkPackages(build)
@@ -219,5 +228,30 @@ func TestContainerfileBuildsFromRepositoryRoot(t *testing.T) {
 	}
 	if !regexp.MustCompile(`(?m)^COPY --from=\S+ /[^ ]*/invoicer /usr/local/bin/invoicer$`).MatchString(containerfile) {
 		t.Fatal("runtime stage does not install the binary")
+	}
+}
+
+func TestContainerfileAcceptsAppVersion(t *testing.T) {
+	root := repoRoot(t)
+	build := buildStage(t, readFile(t, filepath.Join(root, "deploy", "container", "Containerfile")))
+
+	if !regexp.MustCompile(`(?m)^ARG VERSION(?:=|$)`).MatchString(build) {
+		t.Fatal("build stage does not accept a VERSION build argument")
+	}
+	if !regexp.MustCompile(`-X github\.com/zon/invoicer/internal/cli\.Version=\$\{?VERSION\}?`).MatchString(build) {
+		t.Fatal("build does not stamp VERSION into the CLI version")
+	}
+}
+
+func TestContainerfileDefaultsVersionForBuildWithoutArgument(t *testing.T) {
+	root := repoRoot(t)
+	build := buildStage(t, readFile(t, filepath.Join(root, "deploy", "container", "Containerfile")))
+
+	match := regexp.MustCompile(`(?m)^ARG VERSION=(\S+)$`).FindStringSubmatch(build)
+	if match == nil {
+		t.Fatal("build without a VERSION argument stamps an empty version")
+	}
+	if match[1] == "" {
+		t.Fatal("VERSION defaults to empty")
 	}
 }

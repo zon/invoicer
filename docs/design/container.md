@@ -14,7 +14,7 @@ The image runs as a non-root user with the fixed ID 1000. It sets `HOME` to `/ho
 
 The image exposes port 8080, the default web address.
 
-The build stamps the app version into the binary, as [Release](release.md) describes.
+The build takes the app version as the `VERSION` build argument and stamps it into the binary, as [Release](release.md) describes. Without the argument the image reports `dev`, so a local build still works.
 
 ## Paths
 

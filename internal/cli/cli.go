@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/alecthomas/kong"
 	"github.com/zon/invoicer/internal/config"
 	"github.com/zon/invoicer/internal/invoice"
 	"github.com/zon/invoicer/internal/store"
@@ -15,8 +16,15 @@ import (
 
 const defaultWebAddress = ":8080"
 
+// Version is the app version reported by --version. The build stamps it with
+// -ldflags. A binary without a stamp reports "dev".
+var Version = "dev"
+
 // CLI is the root command for invoicer.
 type CLI struct {
+	// Version prints the app version and exits.
+	Version kong.VersionFlag `help:"Print the app version and exit."`
+
 	// Generate is the default subcommand for generating an invoice.
 	Generate GenerateCmd `cmd:"" default:"withargs" help:"Generate an invoice for a given month."`
 

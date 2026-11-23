@@ -32,6 +32,45 @@ The release SHALL fail when the chart `appVersion` differs from the app version.
 - WHEN the release runs
 - THEN the release fails
 
+### Requirement: Release Command
+`just release` SHALL tag the head commit of `origin/main` with `v` followed by the contents of the `VERSION` file at that commit, and push the tag. It SHALL NOT read the working tree.
+
+The command SHALL fail without tagging when `VERSION` is missing or is not `MAJOR.MINOR.PATCH`, when the chart `appVersion` differs from `VERSION`, or when the tag exists on the remote.
+
+#### Scenario: Release from remote head
+- GIVEN `VERSION` holds `0.2.0` at the head of `origin/main`
+- WHEN `just release` runs
+- THEN the head commit of `origin/main` is tagged `v0.2.0`
+- AND the tag is pushed to `origin`
+
+#### Scenario: Local changes ignored
+- GIVEN a local `VERSION` that differs from the one at the head of `origin/main`
+- WHEN `just release` runs
+- THEN the tag uses the version at the head of `origin/main`
+
+#### Scenario: Missing version file
+- GIVEN no `VERSION` file at the head of `origin/main`
+- WHEN `just release` runs
+- THEN it fails
+- AND no tag is created
+
+#### Scenario: Invalid version
+- GIVEN `VERSION` holds `0.2`
+- WHEN `just release` runs
+- THEN it fails
+- AND no tag is created
+
+#### Scenario: Mismatched chart app version
+- GIVEN `VERSION` holds `0.2.0` and the chart `appVersion` is `0.1.0`
+- WHEN `just release` runs
+- THEN it fails
+- AND no tag is created
+
+#### Scenario: Reused tag
+- GIVEN the tag `v0.2.0` exists on the remote
+- WHEN `just release` runs with `VERSION` at `0.2.0`
+- THEN it fails
+
 ### Requirement: Binary Version
 The binary SHALL report its app version from `invoicer --version` and exit successfully.
 

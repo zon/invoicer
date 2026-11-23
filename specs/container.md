@@ -28,11 +28,24 @@ The image SHALL use `invoicer` as its entrypoint and SHALL pass its arguments th
 ### Requirement: Build
 The image SHALL build from the repository root with Podman from `deploy/container/Containerfile`. The build SHALL compile the binary from the Go version in `go.mod`.
 
+The build SHALL accept the app version and stamp it into the binary, so `invoicer --version` reports it. A build without an app version SHALL still produce a working image.
+
 #### Scenario: Build from the root
 - GIVEN a repository checkout
 - WHEN Podman builds from `deploy/container/Containerfile`
 - THEN the build completes
 - AND the image runs `invoicer`
+
+#### Scenario: Stamped version
+- GIVEN an app version
+- WHEN Podman builds the image with that version
+- THEN `invoicer --version` inside the image prints it
+
+#### Scenario: Build without a version
+- GIVEN no app version
+- WHEN Podman builds the image
+- THEN the build completes
+- AND `invoicer --version` inside the image prints a version
 
 ### Requirement: Runtime Content
 The image SHALL hold the binary, CA certificates, and the base system. It SHALL NOT hold a config file, a database, or a secret. It SHALL NOT need a Go toolchain, a C compiler, or build files at run time.

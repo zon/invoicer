@@ -33,6 +33,7 @@ invoicer [<month> [<year>]] [options]
 | `--database` | | Path to the invoice database. Defaults to `~/.invoicer/invoices.db`. |
 | `--rate` | `-r` | Hourly rate in dollars. Required if not set in config. |
 | `--hours` | `-H` | Hours worked per week. Required if not set in config. |
+| `--version` | | Print the app version and exit. |
 
 ### Examples
 
@@ -197,8 +198,10 @@ The image runs `invoicer` as its entrypoint and passes arguments through. `web` 
 Build the image with Podman from the repository root:
 
 ```bash
-podman build -t ghcr.io/zon/invoicer:0.1.0 -f deploy/container/Containerfile .
+podman build -t ghcr.io/zon/invoicer:0.1.0 --build-arg VERSION=0.1.0 -f deploy/container/Containerfile .
 ```
+
+The `VERSION` build argument stamps the app version into the binary. Without it the image reports `dev`.
 
 Push the image to a registry the cluster can reach:
 
@@ -239,8 +242,11 @@ just build   # Build the binary to bin/invoicer
 just dev     # Rebuild and restart the web app on changes
 just install # Build and install to $GOPATH/bin
 just test    # Run all tests
+just release # Tag and push the remote main head as the VERSION release
 just         # List available recipes
 ```
+
+`just build` stamps the version from git. `invoicer --version` reports the release tag without its `v`, or a version naming the commit after the last tag. Uncommitted changes mark the version dirty.
 
 `just dev` runs the web app through [air](https://github.com/air-verse/air), installed with `go install github.com/air-verse/air@latest`. It uses the address and database `invoicer web` would use. Because the templates and stylesheet are embedded, air watches `html` and `css` files as well as Go files, so an edit to `internal/web/templates` reloads too. Extra arguments are passed to the app:
 
