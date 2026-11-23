@@ -11,6 +11,9 @@ on:
 permissions:
   contents: read
 
+env:
+  IMAGE: ghcr.io/zon/invoicer
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,3 +24,14 @@ jobs:
           go-version-file: go.mod
           cache: true
       - run: go test ./...
+      - name: Build the image
+        run: podman build --file deploy/container/Containerfile --tag "$IMAGE:ci" .
+      - name: Install Trivy
+        run: |
+          curl --fail --silent --show-error --location \
+            "https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz" \
+            | sudo tar --extract --gzip --file - --directory /usr/local/bin trivy
+      - name: Save the image
+        run: podman save --output /tmp/invoicer-image.tar "$IMAGE:ci"
+      - name: Scan the image
+        run: trivy image --input /tmp/invoicer-image.tar --severity HIGH,CRITICAL --exit-code 1
