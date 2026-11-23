@@ -82,13 +82,19 @@ type values struct {
 	Hostname  string `yaml:"hostname"`
 	PublicURL string `yaml:"publicURL"`
 	Config    struct {
-		Vendor   string `yaml:"vendor"`
-		Customer string `yaml:"customer"`
-		Project  string `yaml:"project"`
-		Rate     int    `yaml:"rate"`
-		Hours    int    `yaml:"hours"`
-		Database string `yaml:"database"`
+		Vendor        string `yaml:"vendor"`
+		Customer      string `yaml:"customer"`
+		CustomerEmail string `yaml:"customerEmail"`
+		Project       string `yaml:"project"`
+		Rate          int    `yaml:"rate"`
+		Hours         int    `yaml:"hours"`
+		Database      string `yaml:"database"`
 	} `yaml:"config"`
+	Resend struct {
+		From       string `yaml:"from"`
+		SecretName string `yaml:"secretName"`
+		APIKeyKey  string `yaml:"apiKeyKey"`
+	} `yaml:"resend"`
 	Access struct {
 		Issuer          string `yaml:"issuer"`
 		ClientID        string `yaml:"clientId"`
@@ -148,10 +154,15 @@ func TestValuesDefaults(t *testing.T) {
 
 	equal(t, "config.vendor", v.Config.Vendor, "Jane Smith")
 	equal(t, "config.customer", v.Config.Customer, "Acme Corp")
+	equal(t, "config.customerEmail", v.Config.CustomerEmail, "billing@acme.com")
 	equal(t, "config.project", v.Config.Project, "Website Redesign")
 	equal(t, "config.rate", v.Config.Rate, 150)
 	equal(t, "config.hours", v.Config.Hours, 40)
 	equal(t, "config.database", v.Config.Database, "/data/invoices.db")
+
+	equal(t, "resend.from", v.Resend.From, "invoicer@example.com")
+	equal(t, "resend.secretName", v.Resend.SecretName, "invoicer-resend")
+	equal(t, "resend.apiKeyKey", v.Resend.APIKeyKey, "api-key")
 
 	equal(t, "access.issuer", v.Access.Issuer, "https://id.haralovich.org")
 	equal(t, "access.clientId", v.Access.ClientID, "invoicer")
@@ -185,14 +196,15 @@ func TestValuesDefaults(t *testing.T) {
 }
 
 type renderedConfig struct {
-	Vendor   string  `yaml:"vendor"`
-	Customer string  `yaml:"customer"`
-	Project  string  `yaml:"project"`
-	Rate     float64 `yaml:"rate"`
-	Hours    float64 `yaml:"hours"`
-	Database string  `yaml:"database"`
-	BaseURL  string  `yaml:"baseUrl"`
-	OIDC     struct {
+	Vendor        string  `yaml:"vendor"`
+	Customer      string  `yaml:"customer"`
+	CustomerEmail string  `yaml:"customerEmail"`
+	Project       string  `yaml:"project"`
+	Rate          float64 `yaml:"rate"`
+	Hours         float64 `yaml:"hours"`
+	Database      string  `yaml:"database"`
+	BaseURL       string  `yaml:"baseUrl"`
+	OIDC          struct {
 		Issuer           string `yaml:"issuer"`
 		ClientID         string `yaml:"clientId"`
 		ClientSecretFile string `yaml:"clientSecretFile"`
@@ -201,6 +213,10 @@ type renderedConfig struct {
 		CustomerGroup    string `yaml:"customerGroup"`
 		GroupsClaim      string `yaml:"groupsClaim"`
 	} `yaml:"oidc"`
+	Resend *struct {
+		APIKeyFile string `yaml:"apiKeyFile"`
+		From       string `yaml:"from"`
+	} `yaml:"resend"`
 }
 
 func renderChart(t *testing.T, args ...string) []map[string]any {
@@ -279,6 +295,7 @@ func TestConfigRendering(t *testing.T) {
 
 	equal(t, "vendor", cfg.Vendor, "Jane Smith")
 	equal(t, "customer", cfg.Customer, "Acme Corp")
+	equal(t, "customerEmail", cfg.CustomerEmail, "billing@acme.com")
 	equal(t, "project", cfg.Project, "Website Redesign")
 	equal(t, "rate", cfg.Rate, 150)
 	equal(t, "hours", cfg.Hours, 40)
@@ -292,17 +309,25 @@ func TestConfigRendering(t *testing.T) {
 	equal(t, "oidc.adminGroup", cfg.OIDC.AdminGroup, "invoicer-admins")
 	equal(t, "oidc.customerGroup", cfg.OIDC.CustomerGroup, "invoicer-customers")
 	equal(t, "oidc.groupsClaim", cfg.OIDC.GroupsClaim, "groups")
+
+	if cfg.Resend == nil {
+		t.Fatal("config has no resend block")
+	}
+	equal(t, "resend.apiKeyFile", cfg.Resend.APIKeyFile, "/run/secrets/resend-api-key")
+	equal(t, "resend.from", cfg.Resend.From, "invoicer@example.com")
 }
 
 func TestConfigRenderingUsesValues(t *testing.T) {
 	manifests := renderChart(t,
 		"--set", "config.vendor=Grace Hopper",
 		"--set", "config.customer=Compilers Inc",
+		"--set", "config.customerEmail=billing@example.com",
 		"--set", "config.project=",
 		"--set", "config.rate=200",
 		"--set", "config.hours=32",
 		"--set", "config.database=",
 		"--set", "publicURL=https://billing.example.com",
+		"--set", "resend.from=invoices@example.com",
 		"--set", "access.issuer=https://login.example.com",
 		"--set", "access.clientId=example",
 		"--set", "access.adminGroup=billing-admins",
@@ -313,16 +338,32 @@ func TestConfigRenderingUsesValues(t *testing.T) {
 
 	equal(t, "vendor", cfg.Vendor, "Grace Hopper")
 	equal(t, "customer", cfg.Customer, "Compilers Inc")
+	equal(t, "customerEmail", cfg.CustomerEmail, "billing@example.com")
 	equal(t, "project", cfg.Project, "")
 	equal(t, "rate", cfg.Rate, 200)
 	equal(t, "hours", cfg.Hours, 32)
 	equal(t, "database", cfg.Database, "/data/invoices.db")
 	equal(t, "baseUrl", cfg.BaseURL, "https://billing.example.com")
+	if cfg.Resend == nil {
+		t.Fatal("config has no resend block")
+	}
+	equal(t, "resend.from", cfg.Resend.From, "invoices@example.com")
+	equal(t, "resend.apiKeyFile", cfg.Resend.APIKeyFile, "/run/secrets/resend-api-key")
 	equal(t, "oidc.issuer", cfg.OIDC.Issuer, "https://login.example.com")
 	equal(t, "oidc.clientId", cfg.OIDC.ClientID, "example")
 	equal(t, "oidc.adminGroup", cfg.OIDC.AdminGroup, "billing-admins")
 	equal(t, "oidc.customerGroup", cfg.OIDC.CustomerGroup, "billing-customers")
 	equal(t, "oidc.groupsClaim", cfg.OIDC.GroupsClaim, "roles")
+}
+
+func TestConfigRenderingWithoutResendFrom(t *testing.T) {
+	manifests := renderChart(t, "--set", "resend.from=")
+	cfg := decodeRenderedConfig(t, configFile(t, manifests))
+
+	equal(t, "customerEmail", cfg.CustomerEmail, "billing@acme.com")
+	if cfg.Resend != nil {
+		t.Fatalf("config has a resend block without a sender: %+v", *cfg.Resend)
+	}
 }
 
 func deploymentPodSpec(t *testing.T, manifests []map[string]any) map[string]any {
