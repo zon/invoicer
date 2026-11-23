@@ -245,6 +245,44 @@ func (s *Store) Get(id string) (*invoice.Invoice, error) {
 	return toInvoice(&record), nil
 }
 
+// Remove deletes the invoice with the given identifier and its weekly line
+// items. It returns the removed invoice and reports ErrNotFound when no
+// invoice has that identifier.
+func (s *Store) Remove(id string) (*invoice.Invoice, error) {
+	id = strings.ToLower(id)
+
+	var removed *invoice.Invoice
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var record Invoice
+		err := tx.
+			Preload("Weeks", func(db *gorm.DB) *gorm.DB {
+				return db.Order("start")
+			}).
+			First(&record, "id = ?", id).
+			Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("%w: %s", ErrNotFound, strings.ToUpper(id))
+		}
+		if err != nil {
+			return fmt.Errorf("loading invoice %q: %w", id, err)
+		}
+
+		removed = toInvoice(&record)
+
+		if err := tx.Where("invoice_id = ?", id).Delete(&Week{}).Error; err != nil {
+			return fmt.Errorf("removing invoice weeks: %w", err)
+		}
+		if err := tx.Where("id = ?", id).Delete(&Invoice{}).Error; err != nil {
+			return fmt.Errorf("removing invoice: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return removed, nil
+}
+
 // List returns every stored invoice, newest first by year and month, with its
 // weekly line items.
 func (s *Store) List() ([]*invoice.Invoice, error) {

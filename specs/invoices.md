@@ -134,3 +134,31 @@ When the stored invoice for the month is paid, generate SHALL report that the in
 - WHEN an invoice is generated
 - THEN generate reports an error
 - AND generate stores no invoice
+
+### Requirement: Invoice Removal
+The system SHALL delete a stored invoice and its weekly line items when remove receives the invoice's identifier. Remove SHALL accept the identifier in either case. Remove SHALL delete a paid invoice as well as an unpaid one.
+
+Remove SHALL report an error and exit non-zero when no invoice has the identifier, and SHALL delete nothing.
+
+#### Scenario: Stored invoice is removed
+- GIVEN a stored invoice
+- WHEN remove receives its identifier
+- THEN the invoice and its weekly line items are deleted
+- AND the output reports the invoice's month, year, and identifier
+
+#### Scenario: Identifier case does not matter
+- GIVEN a stored invoice whose identifier is lowercase
+- WHEN remove receives the identifier in uppercase
+- THEN the invoice is deleted
+
+#### Scenario: Paid invoice is removed
+- GIVEN a stored paid invoice
+- WHEN remove receives its identifier
+- THEN the invoice is deleted
+
+#### Scenario: Unknown identifier removes nothing
+- GIVEN stored invoices
+- WHEN remove receives an identifier that no invoice has
+- THEN remove reports an error
+- AND no invoice is deleted
+- AND the command exits non-zero

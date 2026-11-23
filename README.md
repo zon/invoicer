@@ -126,6 +126,25 @@ Edited invoice for October 2026: 3F9K2M8Q1X
 
 Changing the customer or project replaces the stored values and keeps the identifier. A paid invoice blocks generation until an admin user marks it unpaid in the web app.
 
+## Removing an Invoice
+
+`invoicer remove` deletes a stored invoice and its weekly line items. Pass the invoice identifier, which accepts uppercase or lowercase:
+
+```
+invoicer remove <id> [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--database` | Path to the invoice database. Defaults to the config value, then `~/.invoicer/invoices.db`. |
+
+```bash
+$ invoicer remove 3F9K2M8Q1X
+Removed invoice for October 2026: 3F9K2M8Q1X
+```
+
+The command removes paid invoices too. An unknown identifier reports an error and removes nothing.
+
 ## Web App
 
 `invoicer web` starts a web app for the stored invoices. It lists invoices at `/` and shows each invoice as a full page with a link back to the list. A user downloads an invoice as a PDF from its detail page. A signed-in user can change an invoice's project from its detail page. An admin user can mark the invoice paid or unpaid from that page. A paid invoice blocks project edits.

@@ -31,6 +31,9 @@ type CLI struct {
 	// Set is the 'set' subcommand group for managing configuration.
 	Set SetCmd `cmd:"" name:"set" help:"Subcommands for managing invoicer configuration."`
 
+	// Remove is the subcommand for deleting a stored invoice.
+	Remove RemoveCmd `cmd:"" help:"Remove a stored invoice by its identifier."`
+
 	// Web is the subcommand for serving the invoice web app.
 	Web WebCmd `cmd:"" help:"Start the invoice web server."`
 }

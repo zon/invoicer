@@ -44,6 +44,10 @@ The monthly [schedule](schedule.md) runs the same generate from an Argo workflow
 
 Generate writes no files and generates no HTML. A failed save leaves the previous invoice unchanged and reports an error. A paid invoice is not edited, so generate for its month reports an error and stores nothing.
 
+## Remove
+
+Remove deletes an invoice and its weeks by identifier in one transaction. Generate prints identifiers in uppercase, so remove accepts either case. A paid invoice can be removed because the paid lock covers generated values and the project, not deletion. See [Invoice Removal](../../specs/invoices.md#requirement-invoice-removal).
+
 ## Out of Scope
 
 * Importing existing invoice files.
