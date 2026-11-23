@@ -106,8 +106,8 @@ The lab Terraform owns the DNS record for `hostname`.
 
 ## Out of Scope
 
-* Building and publishing the image, which belongs to [Release](release.md)
-* Vulnerability scanning
+* Building and publishing the image, which belongs to [Build](build.md)
+* Vulnerability scanning, which belongs to [Build](build.md)
 * The monthly schedule
 * DNS records
 * TLS certificates outside cert-manager

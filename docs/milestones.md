@@ -2,13 +2,9 @@
 
 High level objectives. Work through them in order. See [process](zpecs/process.md).
 
-## Container and chart
+## Build pipeline
 
-One container image runs the CLI and the web app. A Helm chart deploys the web app with a persistent volume for the SQLite database and its OIDC configuration.
-
-## Build and deploy pipeline
-
-CI builds the container image, scans it for vulnerabilities, and packages the Helm chart. A deploy workflow releases the web app to the cluster. High and critical vulnerabilities stop the build.
+CI builds the container image, scans it for vulnerabilities, and packages the Helm chart. High and critical vulnerabilities stop the build.
 
 ## Monthly invoice schedule
 

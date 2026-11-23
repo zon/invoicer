@@ -32,6 +32,6 @@ Podman builds the image from the repository root. A local run mounts a config fi
 ## Out of Scope
 
 * Publishing image tags, which belong to [Release](release.md)
-* Vulnerability scanning
+* Vulnerability scanning, which belongs to [Build](build.md)
 * Deployment manifests, which belong to the [chart](chart.md)
 * The monthly schedule

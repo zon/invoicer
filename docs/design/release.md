@@ -38,7 +38,6 @@ One release tag builds the binary, image, and chart from the tagged commit. The 
 
 ## Out of Scope
 
-* Build and deploy pipeline steps
-* Vulnerability scanning
+* Build, which belongs to [Build](build.md)
+* Deployment, which belongs to the lab repository
 * Registry credentials
-* Deployment strategy
