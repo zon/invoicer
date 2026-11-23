@@ -107,6 +107,64 @@ func TestPullRequestRunPublishesNothing(t *testing.T) {
 	}
 }
 
+func TestWorkflowRunsTests(t *testing.T) {
+	for _, job := range loadWorkflow(t).Jobs {
+		if stepIndexRunning(job.Steps, "go test ./...") >= 0 {
+			return
+		}
+	}
+	t.Fatal("workflow does not run go test ./...")
+}
+
+func TestWorkflowTestsBeforePublishing(t *testing.T) {
+	for jobName, job := range loadWorkflow(t).Jobs {
+		testIndex := stepIndexRunning(job.Steps, "go test ./...")
+		for index, step := range job.Steps {
+			if !isPublishing(step) {
+				continue
+			}
+			if testIndex < 0 {
+				t.Fatalf("job %s publishes without running go test ./...", jobName)
+			}
+			if index < testIndex {
+				t.Fatalf("job %s publishes before running go test ./...", jobName)
+			}
+		}
+	}
+}
+
+func TestWorkflowStopsBeforePublishingWhenTestsFail(t *testing.T) {
+	for jobName, job := range loadWorkflow(t).Jobs {
+		for _, step := range job.Steps {
+			if !isPublishing(step) {
+				continue
+			}
+			if runsAfterFailure(step.If) || runsAfterFailure(job.If) {
+				t.Fatalf("job %s can publish after a failed test", jobName)
+			}
+		}
+	}
+}
+
+func stepIndexRunning(steps []workflowStep, command string) int {
+	for index, step := range steps {
+		if strings.Contains(step.Run, command) {
+			return index
+		}
+	}
+	return -1
+}
+
+func runsAfterFailure(condition string) bool {
+	condition = strings.ReplaceAll(strings.ToLower(condition), " ", "")
+	for _, call := range []string{"always()", "failure()", "cancelled()", "!success()"} {
+		if strings.Contains(condition, call) {
+			return true
+		}
+	}
+	return false
+}
+
 func isPublishing(step workflowStep) bool {
 	text := strings.ToLower(step.Uses + "\n" + step.Run)
 	for _, command := range []string{
