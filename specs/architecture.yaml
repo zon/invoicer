@@ -2,7 +2,7 @@
   description: Builds, scans, and publishes the container image and chart.
 
 - path: deploy/chart
-  description: Deploys the web app to Kubernetes with Helm.
+  description: Deploys the web app and the monthly schedule to Kubernetes with Helm.
 
 - path: deploy/container
   description: Builds the image that runs the invoice CLI and web app.
