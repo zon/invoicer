@@ -1,0 +1,60 @@
+{{- if .Values.schedule.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: {{ include "invoicer.fullname" . }}
+  namespace: invoicer
+  labels:
+    {{- include "invoicer.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.schedule.cron | quote }}
+  timezone: UTC
+  concurrencyPolicy: Forbid
+  workflowSpec:
+    entrypoint: generate
+    ttlStrategy:
+      secondsAfterSuccess: 86400
+    {{- with .Values.image.pullSecrets }}
+    imagePullSecrets:
+      {{- range . }}
+      - name: {{ . | quote }}
+      {{- end }}
+    {{- end }}
+    templates:
+      - name: generate
+        retryStrategy:
+          limit: 2
+        securityContext:
+          {{- include "invoicer.podSecurityContext" . | nindent 10 }}
+        affinity:
+          podAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchLabels:
+                    {{- include "invoicer.selectorLabels" . | nindent 20 }}
+                topologyKey: kubernetes.io/hostname
+        volumes:
+          - name: config
+            configMap:
+              name: {{ include "invoicer.fullname" . }}-config
+              defaultMode: 0444
+          - name: data
+            persistentVolumeClaim:
+              claimName: {{ include "invoicer.dataClaimName" . }}
+        container:
+          image: {{ include "invoicer.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - generate
+          securityContext:
+            {{- include "invoicer.containerSecurityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /home/invoicer/.invoicer/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: data
+              mountPath: /data
+{{- end }}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -60,6 +61,17 @@ func TestChartMetadata(t *testing.T) {
 	}
 }
 
+func TestChartAppVersionMatchesRepoVersion(t *testing.T) {
+	var chart chartMetadata
+	decode(t, filepath.Join(chartDir(t), "Chart.yaml"), &chart)
+
+	data, err := os.ReadFile(filepath.Join(chartDir(t), "..", "..", "VERSION"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	equal(t, "appVersion", chart.AppVersion, strings.TrimSpace(string(data)))
+}
+
 type values struct {
 	Image struct {
 		Repository  string   `yaml:"repository"`
@@ -92,6 +104,10 @@ type values struct {
 		StorageClass  string `yaml:"storageClass"`
 		ExistingClaim string `yaml:"existingClaim"`
 	} `yaml:"data"`
+	Schedule struct {
+		Enabled bool   `yaml:"enabled"`
+		Cron    string `yaml:"cron"`
+	} `yaml:"schedule"`
 	Service struct {
 		Port int `yaml:"port"`
 	} `yaml:"service"`
@@ -149,6 +165,9 @@ func TestValuesDefaults(t *testing.T) {
 	equal(t, "data.size", v.Data.Size, "1Gi")
 	equal(t, "data.storageClass", v.Data.StorageClass, "reliable")
 	equal(t, "data.existingClaim", v.Data.ExistingClaim, "")
+
+	equal(t, "schedule.enabled", v.Schedule.Enabled, true)
+	equal(t, "schedule.cron", v.Schedule.Cron, "0 9 1 * *")
 
 	equal(t, "service.port", v.Service.Port, 80)
 
@@ -322,8 +341,13 @@ func webContainer(t *testing.T, manifests []map[string]any) map[string]any {
 }
 
 func TestConfigMountIsReadOnly(t *testing.T) {
-	const configPath = "/home/invoicer/.invoicer/config.yaml"
 	manifests := renderChart(t)
+	assertConfigMount(t, manifests, deploymentPodSpec(t, manifests), webContainer(t, manifests))
+}
+
+func assertConfigMount(t *testing.T, manifests []map[string]any, pod, container map[string]any) {
+	t.Helper()
+	const configPath = "/home/invoicer/.invoicer/config.yaml"
 	configMap := findKind(t, manifests, "ConfigMap")
 
 	configName, _ := configMap["metadata"].(map[string]any)["name"].(string)
@@ -331,8 +355,7 @@ func TestConfigMountIsReadOnly(t *testing.T) {
 		t.Fatal("config map has no name")
 	}
 
-	podSpec := deploymentPodSpec(t, manifests)
-	mounts, _ := webContainer(t, manifests)["volumeMounts"].([]any)
+	mounts, _ := container["volumeMounts"].([]any)
 
 	var volumeName string
 	for _, value := range mounts {
@@ -343,13 +366,14 @@ func TestConfigMountIsReadOnly(t *testing.T) {
 		if mount["readOnly"] != true {
 			t.Fatal("config file is not mounted read-only")
 		}
+		equal(t, "config file subPath", mount["subPath"], "config.yaml")
 		volumeName, _ = mount["name"].(string)
 	}
 	if volumeName == "" {
-		t.Fatalf("deployment mounts no file at %s", configPath)
+		t.Fatalf("pod mounts no file at %s", configPath)
 	}
 
-	volumes := podSpec["volumes"].([]any)
+	volumes, _ := pod["volumes"].([]any)
 	for _, value := range volumes {
 		volume := value.(map[string]any)
 		if volume["name"] != volumeName {
@@ -364,7 +388,7 @@ func TestConfigMountIsReadOnly(t *testing.T) {
 		}
 		return
 	}
-	t.Fatalf("deployment has no volume named %s", volumeName)
+	t.Fatalf("pod has no volume named %s", volumeName)
 }
 
 type secretFile struct {
@@ -479,10 +503,9 @@ func pvcName(t *testing.T, manifests []map[string]any) string {
 	return name
 }
 
-func assertDataMount(t *testing.T, manifests []map[string]any, claimName string) {
+func assertDataMount(t *testing.T, pod, container map[string]any, claimName string) {
 	t.Helper()
-	podSpec := deploymentPodSpec(t, manifests)
-	mounts, _ := webContainer(t, manifests)["volumeMounts"].([]any)
+	mounts, _ := container["volumeMounts"].([]any)
 
 	var volumeName string
 	for _, value := range mounts {
@@ -496,10 +519,10 @@ func assertDataMount(t *testing.T, manifests []map[string]any, claimName string)
 		volumeName, _ = mount["name"].(string)
 	}
 	if volumeName == "" {
-		t.Fatal("deployment mounts no volume at /data")
+		t.Fatal("pod mounts no volume at /data")
 	}
 
-	volumes, _ := podSpec["volumes"].([]any)
+	volumes, _ := pod["volumes"].([]any)
 	for _, value := range volumes {
 		volume := value.(map[string]any)
 		if volume["name"] != volumeName {
@@ -511,7 +534,7 @@ func assertDataMount(t *testing.T, manifests []map[string]any, claimName string)
 		}
 		return
 	}
-	t.Fatalf("deployment has no volume named %s", volumeName)
+	t.Fatalf("pod has no volume named %s", volumeName)
 }
 
 func TestPersistentVolumeClaim(t *testing.T) {
@@ -528,7 +551,7 @@ func TestPersistentVolumeClaim(t *testing.T) {
 	requests, _ := spec["resources"].(map[string]any)["requests"].(map[string]any)
 	equal(t, "storage", requests["storage"], "1Gi")
 
-	assertDataMount(t, manifests, pvcName(t, manifests))
+	assertDataMount(t, deploymentPodSpec(t, manifests), webContainer(t, manifests), pvcName(t, manifests))
 }
 
 func TestPersistentVolumeClaimUsesValues(t *testing.T) {
@@ -543,7 +566,7 @@ func TestPersistentVolumeClaimUsesValues(t *testing.T) {
 	requests, _ := spec["resources"].(map[string]any)["requests"].(map[string]any)
 	equal(t, "storage", requests["storage"], "5Gi")
 
-	assertDataMount(t, manifests, pvcName(t, manifests))
+	assertDataMount(t, deploymentPodSpec(t, manifests), webContainer(t, manifests), pvcName(t, manifests))
 }
 
 func TestPersistentVolumeClaimReusesExistingClaim(t *testing.T) {
@@ -555,7 +578,7 @@ func TestPersistentVolumeClaimReusesExistingClaim(t *testing.T) {
 		}
 	}
 
-	assertDataMount(t, manifests, "shared-data")
+	assertDataMount(t, deploymentPodSpec(t, manifests), webContainer(t, manifests), "shared-data")
 }
 
 func TestDeploymentRecreateStrategy(t *testing.T) {
@@ -676,6 +699,11 @@ func TestNoImagePullSecretsByDefault(t *testing.T) {
 	manifests := renderChart(t)
 
 	equalsAny(t, "web imagePullSecrets", pullSecretNames(t, deploymentPodSpec(t, manifests)), nil)
+
+	workflowSpec := cronWorkflowWorkflowSpec(t, manifests)
+	if secrets, ok := workflowSpec["imagePullSecrets"]; ok && secrets != nil {
+		t.Fatalf("schedule imagePullSecrets: got %v, want none", secrets)
+	}
 }
 
 func TestDeploymentRestartsWhenConfigChanges(t *testing.T) {
@@ -846,6 +874,232 @@ func TestCertificateUsesValues(t *testing.T) {
 	equal(t, "issuerRef.name", spec["issuerRef"].(map[string]any)["name"], "staging")
 }
 
+func cronWorkflow(t *testing.T, manifests []map[string]any) map[string]any {
+	t.Helper()
+	return findManifest(t, manifests, "argoproj.io/v1alpha1", "CronWorkflow")
+}
+
+func cronWorkflowSpec(t *testing.T, manifests []map[string]any) map[string]any {
+	t.Helper()
+	spec, ok := cronWorkflow(t, manifests)["spec"].(map[string]any)
+	if !ok {
+		t.Fatal("CronWorkflow has no spec")
+	}
+	return spec
+}
+
+func cronWorkflowWorkflowSpec(t *testing.T, manifests []map[string]any) map[string]any {
+	t.Helper()
+	workflowSpec, ok := cronWorkflowSpec(t, manifests)["workflowSpec"].(map[string]any)
+	if !ok {
+		t.Fatal("CronWorkflow has no workflowSpec")
+	}
+	return workflowSpec
+}
+
+func TestScheduleRendersOneCronWorkflow(t *testing.T) {
+	manifests := renderChart(t)
+
+	count := 0
+	for _, manifest := range manifests {
+		if manifest["kind"] == "CronWorkflow" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("chart renders %d CronWorkflows, want one", count)
+	}
+
+	workflow := cronWorkflow(t, manifests)
+	metadata := workflow["metadata"].(map[string]any)
+	equal(t, "namespace", metadata["namespace"], "invoicer")
+	if name, _ := metadata["name"].(string); name == "" {
+		t.Fatal("CronWorkflow has no name")
+	}
+}
+
+func cronWorkflowTemplate(t *testing.T, manifests []map[string]any) map[string]any {
+	t.Helper()
+	workflowSpec := cronWorkflowWorkflowSpec(t, manifests)
+	entrypoint, _ := workflowSpec["entrypoint"].(string)
+	if entrypoint == "" {
+		t.Fatal("CronWorkflow has no entrypoint")
+	}
+
+	templates, _ := workflowSpec["templates"].([]any)
+	if len(templates) != 1 {
+		t.Fatalf("CronWorkflow has %d templates, want one", len(templates))
+	}
+	template, _ := templates[0].(map[string]any)
+	name, _ := template["name"].(string)
+	equal(t, "template name", name, entrypoint)
+	return template
+}
+
+func cronWorkflowContainer(t *testing.T, manifests []map[string]any) map[string]any {
+	t.Helper()
+	container, _ := cronWorkflowTemplate(t, manifests)["container"].(map[string]any)
+	return container
+}
+
+func TestSchedulePodRunsGenerate(t *testing.T) {
+	manifests := renderChart(t)
+	container := cronWorkflowContainer(t, manifests)
+
+	equal(t, "pod image", containerImage(t, container), containerImage(t, webContainer(t, manifests)))
+	equalsAny(t, "args", container["args"], []any{"generate"})
+}
+
+func TestSchedulePodUsesImageTagValue(t *testing.T) {
+	manifests := renderChart(t, "--set", "image.tag=v1.2.3")
+
+	equal(t, "pod image", containerImage(t, cronWorkflowContainer(t, manifests)), "ghcr.io/zon/invoicer:v1.2.3")
+}
+
+func TestSchedulePodMountsConfig(t *testing.T) {
+	manifests := renderChart(t)
+	assertConfigMount(t, manifests, cronWorkflowTemplate(t, manifests), cronWorkflowContainer(t, manifests))
+}
+
+func TestSchedulePodMountsData(t *testing.T) {
+	manifests := renderChart(t)
+	assertDataMount(t, cronWorkflowTemplate(t, manifests), cronWorkflowContainer(t, manifests), pvcName(t, manifests))
+}
+
+func TestSchedulePodMountsExistingDataClaim(t *testing.T) {
+	manifests := renderChart(t, "--set", "data.existingClaim=shared-data")
+	assertDataMount(t, cronWorkflowTemplate(t, manifests), cronWorkflowContainer(t, manifests), "shared-data")
+}
+
+func TestSchedulePodUsesPullSecrets(t *testing.T) {
+	manifests := renderChart(t, "--set", "image.pullSecrets={registry-a,registry-b}")
+	want := []any{"registry-a", "registry-b"}
+
+	equalsAny(t, "schedule imagePullSecrets", pullSecretNames(t, cronWorkflowWorkflowSpec(t, manifests)), want)
+	equalsAny(t, "web imagePullSecrets", pullSecretNames(t, deploymentPodSpec(t, manifests)), want)
+}
+
+func TestSchedulePodSecurityContext(t *testing.T) {
+	manifests := renderChart(t)
+	assertSameSecurityContext(t,
+		cronWorkflowTemplate(t, manifests), cronWorkflowContainer(t, manifests),
+		deploymentPodSpec(t, manifests), webContainer(t, manifests),
+	)
+}
+
+func assertSameSecurityContext(t *testing.T, pod, container, webPod, webContainer map[string]any) {
+	t.Helper()
+
+	webPodSecurity, _ := webPod["securityContext"].(map[string]any)
+	if len(webPodSecurity) == 0 {
+		t.Fatal("web pod has no security context")
+	}
+	podSecurity, _ := pod["securityContext"].(map[string]any)
+	equalsMap(t, "pod securityContext", podSecurity, webPodSecurity)
+
+	webContainerSecurity, _ := webContainer["securityContext"].(map[string]any)
+	if len(webContainerSecurity) == 0 {
+		t.Fatal("web container has no security context")
+	}
+	containerSecurity, _ := container["securityContext"].(map[string]any)
+	equalsMap(t, "container securityContext", containerSecurity, webContainerSecurity)
+}
+
+func TestSchedulePodUsesResources(t *testing.T) {
+	manifests := renderChart(t)
+	resources, _ := webContainer(t, manifests)["resources"].(map[string]any)
+	if len(resources) == 0 {
+		t.Fatal("web container has no resources")
+	}
+
+	equalsMap(t, "schedule resources", cronWorkflowContainer(t, manifests)["resources"], resources)
+}
+
+func TestSchedulePodUsesResourceValues(t *testing.T) {
+	manifests := renderChart(t,
+		"--set", "resources.requests.cpu=100m",
+		"--set", "resources.requests.memory=128Mi",
+		"--set", "resources.limits.cpu=750m",
+		"--set", "resources.limits.memory=512Mi",
+	)
+	want := map[string]any{
+		"requests": map[string]any{"cpu": "100m", "memory": "128Mi"},
+		"limits":   map[string]any{"cpu": "750m", "memory": "512Mi"},
+	}
+
+	equalsMap(t, "web resources", webContainer(t, manifests)["resources"], want)
+	equalsMap(t, "schedule resources", cronWorkflowContainer(t, manifests)["resources"], want)
+}
+
+func TestSchedulePodAffinity(t *testing.T) {
+	manifests := renderChart(t)
+
+	affinity, _ := cronWorkflowTemplate(t, manifests)["affinity"].(map[string]any)
+	podAffinity, _ := affinity["podAffinity"].(map[string]any)
+	terms, _ := podAffinity["requiredDuringSchedulingIgnoredDuringExecution"].([]any)
+	if len(terms) != 1 {
+		t.Fatalf("schedule pod has %d required affinity terms, want one", len(terms))
+	}
+
+	term := terms[0].(map[string]any)
+	equal(t, "topologyKey", term["topologyKey"], "kubernetes.io/hostname")
+
+	deployment := findKind(t, manifests, "Deployment")
+	webLabels, _ := deployment["spec"].(map[string]any)["template"].(map[string]any)["metadata"].(map[string]any)["labels"].(map[string]any)
+	if len(webLabels) == 0 {
+		t.Fatal("web pod has no labels")
+	}
+	selector, _ := term["labelSelector"].(map[string]any)
+	equalsMap(t, "affinity label selector", selector["matchLabels"], webLabels)
+}
+
+func TestSchedulePodRetriesTwice(t *testing.T) {
+	retry, _ := cronWorkflowTemplate(t, renderChart(t))["retryStrategy"].(map[string]any)
+	if len(retry) == 0 {
+		t.Fatal("schedule pod has no retry strategy")
+	}
+
+	equal(t, "retry limit", retry["limit"], 2)
+}
+
+func TestScheduleRemovesSuccessfulRunAfterOneDay(t *testing.T) {
+	ttl, _ := cronWorkflowWorkflowSpec(t, renderChart(t))["ttlStrategy"].(map[string]any)
+	if len(ttl) == 0 {
+		t.Fatal("schedule has no TTL strategy")
+	}
+
+	equal(t, "secondsAfterSuccess", ttl["secondsAfterSuccess"], 86400)
+	if value, ok := ttl["secondsAfterFailure"]; ok && value != nil {
+		t.Fatalf("failed run expires after %v", value)
+	}
+}
+
+func TestScheduleUsesDefaultCron(t *testing.T) {
+	spec := cronWorkflowSpec(t, renderChart(t))
+
+	equal(t, "schedule", spec["schedule"], "0 9 1 * *")
+	equal(t, "timezone", spec["timezone"], "UTC")
+	equal(t, "concurrencyPolicy", spec["concurrencyPolicy"], "Forbid")
+}
+
+func TestScheduleUsesCronValue(t *testing.T) {
+	spec := cronWorkflowSpec(t, renderChart(t, "--set", "schedule.cron=30 6 2 * *"))
+
+	equal(t, "schedule", spec["schedule"], "30 6 2 * *")
+	equal(t, "timezone", spec["timezone"], "UTC")
+}
+
+func TestScheduleDisabledRendersNoCronWorkflow(t *testing.T) {
+	manifests := renderChart(t, "--set", "schedule.enabled=false")
+
+	findManifest(t, manifests, "apps/v1", "Deployment")
+	for _, manifest := range manifests {
+		if manifest["kind"] == "CronWorkflow" {
+			t.Fatal("chart renders a CronWorkflow when disabled")
+		}
+	}
+}
+
 func TestCertificateDisabled(t *testing.T) {
 	manifests := renderChart(t, "--set", "certificate.enabled=false")
 
@@ -872,6 +1126,13 @@ func equalsAny(t *testing.T, name string, got any, want []any) {
 		if values[i] != want[i] {
 			t.Fatalf("%s: got %v, want %v", name, got, want)
 		}
+	}
+}
+
+func equalsMap(t *testing.T, name string, got, want any) {
+	t.Helper()
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("%s: got %v, want %v", name, got, want)
 	}
 }
 

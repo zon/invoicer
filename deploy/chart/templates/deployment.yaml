@@ -26,9 +26,7 @@ spec:
       {{- end }}
       terminationGracePeriodSeconds: 30
       securityContext:
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
+        {{- include "invoicer.podSecurityContext" . | nindent 8 }}
       containers:
         - name: web
           image: {{ include "invoicer.image" . | quote }}
@@ -45,7 +43,9 @@ spec:
             tcpSocket:
               port: 8080
           securityContext:
-            readOnlyRootFilesystem: true
+            {{- include "invoicer.containerSecurityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: config
               mountPath: /home/invoicer/.invoicer/config.yaml

@@ -35,3 +35,13 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- define "invoicer.dataClaimName" -}}
 {{- default (printf "%s-data" (include "invoicer.fullname" .)) .Values.data.existingClaim -}}
 {{- end -}}
+
+{{- define "invoicer.podSecurityContext" -}}
+runAsUser: 1000
+runAsGroup: 1000
+fsGroup: 1000
+{{- end -}}
+
+{{- define "invoicer.containerSecurityContext" -}}
+readOnlyRootFilesystem: true
+{{- end -}}
