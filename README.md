@@ -297,7 +297,6 @@ just build   # Build the binary to bin/invoicer
 just dev     # Rebuild and restart the web app on changes
 just install # Build and install to $GOPATH/bin
 just test    # Run all tests
-just release # Tag and push the remote main head as the VERSION release
 just         # List available recipes
 ```
 

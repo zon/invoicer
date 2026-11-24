@@ -1,41 +1,57 @@
-name: Build
+name: Build Container
 
 on:
   push:
-    tags:
-      - "v*"
-  workflow_call:
-    inputs:
-      version:
-        description: The app version to build
-        required: true
-        type: string
+    branches:
+      - main
 
 permissions:
-  contents: read
+  contents: write
   packages: write
+
+concurrency:
+  group: build-container
+  cancel-in-progress: false
 
 env:
   IMAGE: ghcr.io/zon/invoicer
 
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      built: ${{ steps.check.outputs.built }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Read the app version
+        id: version
+        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+      - name: Log in to the container registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io --username "${{ github.actor }}" --password-stdin
+      - name: Check the image
+        id: check
+        run: |
+          if skopeo inspect "docker://$IMAGE:${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "built=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "built=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: [check]
+    if: needs.check.outputs.built == 'false'
+    runs-on: ubuntu-latest
+    env:
+      APP_VERSION: ${{ needs.check.outputs.version }}
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: go.mod
           cache: true
-      - name: Set the app version
-        env:
-          INPUT_VERSION: ${{ inputs.version }}
-        run: |
-          version=${INPUT_VERSION:-$(sh scripts/version.sh)}
-          echo "APP_VERSION=$version" >> "$GITHUB_ENV"
       - run: go test ./...
-      - name: Lint the chart
-        run: helm lint deploy/chart
       - name: Build the image
         run: |
           podman build \
@@ -55,8 +71,6 @@ jobs:
         run: podman save --output /tmp/invoicer-image.tar "$IMAGE:ci"
       - name: Scan the image
         run: trivy image --input /tmp/invoicer-image.tar --severity HIGH,CRITICAL --exit-code 1
-      - name: Check the chart app version
-        run: sh scripts/check-chart-app-version.sh deploy/chart "$APP_VERSION"
       - name: Log in to the container registry
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io --username "${{ github.actor }}" --password-stdin
@@ -67,8 +81,12 @@ jobs:
             "$APP_VERSION" \
             "$GITHUB_SHA" \
             "$IMAGE:ci"
-      - name: Log in to the chart registry
+      - name: Tag the release
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
-      - name: Publish the chart
-        run: sh scripts/publish-chart.sh deploy/chart oci://ghcr.io/zon/charts
+          tag="v$APP_VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag is already on the remote"
+            exit 0
+          fi
+          git tag "$tag"
+          git push origin "$tag"

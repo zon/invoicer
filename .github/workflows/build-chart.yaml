@@ -1,0 +1,66 @@
+name: Build Chart
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: build-chart
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      chart_version: ${{ steps.chart_version.outputs.version }}
+      built: ${{ steps.check.outputs.built }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Read the app version
+        id: version
+        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+      - name: Read the chart version
+        id: chart_version
+        run: |
+          version=$(awk -F': *' '$1 == "version" {print $2; exit}' deploy/chart/Chart.yaml | tr -d '"')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Log in to the chart registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+      - name: Check the chart
+        id: check
+        run: |
+          if helm show chart "oci://ghcr.io/zon/charts/invoicer" --version "${{ steps.chart_version.outputs.version }}" >/dev/null 2>&1; then
+            echo "built=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "built=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: [check]
+    if: needs.check.outputs.built == 'false'
+    runs-on: ubuntu-latest
+    env:
+      APP_VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test ./...
+      - name: Lint the chart
+        run: helm lint deploy/chart
+      - name: Check the chart app version
+        run: sh scripts/check-chart-app-version.sh deploy/chart "$APP_VERSION"
+      - name: Log in to the chart registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+      - name: Publish the chart
+        run: sh scripts/publish-chart.sh deploy/chart oci://ghcr.io/zon/charts

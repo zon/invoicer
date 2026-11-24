@@ -1,32 +1,30 @@
 # Release Design
 
-A release names one commit. The git tag supplies the app version. The binary, image, and chart derive their versions from it, so the artifacts of a release match.
+A release names one commit on `main`. The `VERSION` file supplies the app version. The container build tags the commit `v<app version>` after it publishes the image. The image and chart take their versions from `VERSION`, so the artifacts of a release match.
 
 ## App Version
 
-Releases use Semantic Versioning. A release tag is `vMAJOR.MINOR.PATCH` on `main`, such as `v0.2.0`. The app version is the tag without the `v`.
+Releases use Semantic Versioning. The app version is `MAJOR.MINOR.PATCH`, such as `0.2.0`.
 
 While the major version is 0, a breaking change bumps minor and every other change bumps patch. From 1.0, the usual SemVer rules apply.
 
-The `VERSION` file at the repo root holds the app version, such as `0.2.0`. A version bump sets `VERSION` and the chart versions, as [Chart](#chart) describes. A release fails when `VERSION` and the chart `appVersion` differ, so the chart defaults to the released image.
+The `VERSION` file at the repo root holds the app version. A version bump sets `VERSION` and the chart versions, as [Chart](#chart) describes. The chart build fails when `VERSION` and the chart `appVersion` differ, so the chart defaults to the release image.
 
-## Release Command
+## Release Tag
 
-`just release` starts a release. It fetches `origin/main` and reads `VERSION` from that commit. It tags the commit `v<version>` and pushes the tag. The tag starts the build, as [Build](build.md) describes.
+The container build tags the commit it builds `v<app version>` and pushes the tag after it publishes the image. The tag names a commit whose image exists. A pushed tag is never reused.
 
-The command reads the remote commit, not the working tree, so the tag matches the commit it names. Local changes and the current branch do not matter.
-
-The command fails before it tags when `VERSION` is missing or not `MAJOR.MINOR.PATCH`, when the chart `appVersion` differs, or when the tag exists on the remote.
+A main push whose app version image already exists creates no tag. The first successful container build of that version did.
 
 ## Automatic Release
 
-A push to `main` releases when `VERSION` names an untagged version. The release workflow reads `VERSION` from the pushed commit and skips when the tag exists on the remote. Otherwise it tags the commit and calls the build, so a version bump releases without a manual step.
+A push to `main` starts the container and chart builds, as [Build](build.md) describes. Each build skips when its registry already holds its version, so a version bump releases without a manual step.
 
 ## Binary
 
-The build stamps the app version into the binary. `invoicer --version` prints it.
+CI stamps the app version into the binary, so `invoicer --version` prints it.
 
-A tagged build reports the app version, such as `0.2.0`. Any other build reports a version that names the commit, such as `0.2.0-3-gabc1234`. A build with uncommitted changes marks the version dirty. A build without git metadata reports `dev`.
+A local build from the release tag prints the app version, such as `0.2.0`. A local build from another commit prints a version that names the commit, such as `0.2.0-3-gabc1234`. A build with uncommitted changes marks the version dirty. A build without git metadata prints `dev`.
 
 ## Container
 
@@ -44,8 +42,8 @@ An app version bump sets `appVersion` to the new app version. It raises `version
 
 The chart `appVersion` is the app version of the image the chart defaults to. An empty `image.tag` uses it, as [Chart](chart.md) describes. A chart-only fix keeps `appVersion` and defaults to the last released image.
 
-A release publishes the chart package from the tagged commit. A chart-only fix ships in the next release, because only a tag builds.
+A chart build publishes the chart package from the main commit. A chart-only fix publishes the new chart version on its own, when the container build finds its image already published.
 
 ## Artifacts
 
-One release tag builds the binary, image, and chart from the tagged commit. The binary version, image version tag, and chart `appVersion` are the same app version. The chart `version` identifies the chart package.
+One main commit with `VERSION` builds the binary, image, and chart. The binary version, image version tag, and chart `appVersion` are the same app version. The chart `version` identifies the chart package. The container build tags the commit `v<app version>`.

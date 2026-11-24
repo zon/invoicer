@@ -1,20 +1,20 @@
 # Release Specification
 
 ## Purpose
-Releases give the binary, container image, and chart one traceable app version from a git tag.
+Releases give the binary, container image, chart, and git tag one traceable app version.
 
 ## Requirements
 
-### Requirement: Release Tag
-A release SHALL use a git tag `vMAJOR.MINOR.PATCH` on `main`. The app version SHALL be the tag without the leading `v`.
+### Requirement: App Version
+A release SHALL use the app version in the `VERSION` file at the repo root. The app version SHALL be `MAJOR.MINOR.PATCH`.
 
 While the major version is 0, a breaking change SHALL bump minor and any other change SHALL bump patch. From 1.0, SemVer rules SHALL apply.
 
-The release SHALL fail when the chart `appVersion` differs from the app version.
+The chart build SHALL fail when the chart `appVersion` differs from the app version.
 
-#### Scenario: Tagged release
-- GIVEN `main` at a release commit
-- WHEN the commit is tagged `v0.2.0`
+#### Scenario: Version file
+- GIVEN `VERSION` holds `0.2.0`
+- WHEN a release builds
 - THEN the app version is `0.2.0`
 
 #### Scenario: Breaking change before 1.0
@@ -28,67 +28,65 @@ The release SHALL fail when the chart `appVersion` differs from the app version.
 - THEN the next release is `0.2.1`
 
 #### Scenario: Mismatched chart app version
-- GIVEN a tag `v0.2.0` and a chart `appVersion` of `0.1.0`
-- WHEN the release runs
-- THEN the release fails
-
-### Requirement: Release Command
-`just release` SHALL tag the head commit of `origin/main` with `v` followed by the contents of the `VERSION` file at that commit, and push the tag. It SHALL NOT read the working tree.
-
-The command SHALL fail without tagging when `VERSION` is missing or is not `MAJOR.MINOR.PATCH`, when the chart `appVersion` differs from `VERSION`, or when the tag exists on the remote.
-
-#### Scenario: Release from remote head
-- GIVEN `VERSION` holds `0.2.0` at the head of `origin/main`
-- WHEN `just release` runs
-- THEN the head commit of `origin/main` is tagged `v0.2.0`
-- AND the tag is pushed to `origin`
-
-#### Scenario: Local changes ignored
-- GIVEN a local `VERSION` that differs from the one at the head of `origin/main`
-- WHEN `just release` runs
-- THEN the tag uses the version at the head of `origin/main`
-
-#### Scenario: Missing version file
-- GIVEN no `VERSION` file at the head of `origin/main`
-- WHEN `just release` runs
-- THEN it fails
-- AND no tag is created
-
-#### Scenario: Invalid version
-- GIVEN `VERSION` holds `0.2`
-- WHEN `just release` runs
-- THEN it fails
-- AND no tag is created
-
-#### Scenario: Mismatched chart app version
 - GIVEN `VERSION` holds `0.2.0` and the chart `appVersion` is `0.1.0`
-- WHEN `just release` runs
-- THEN it fails
-- AND no tag is created
+- WHEN the chart build runs
+- THEN the build fails
 
-#### Scenario: Reused tag
+### Requirement: Release Tag
+The container build SHALL tag the built commit `v<app version>` and push the tag after it publishes the image. The tag SHALL NOT be reused.
+
+The container build SHALL NOT create a tag that exists on the remote.
+
+#### Scenario: Tagged build
+- GIVEN `VERSION` holds `0.2.0` at a main commit
+- AND the image `0.2.0` does not exist
+- WHEN the container build runs
+- THEN it publishes the image
+- AND it tags the commit `v0.2.0`
+- AND it pushes the tag
+
+#### Scenario: Existing tag
 - GIVEN the tag `v0.2.0` exists on the remote
-- WHEN `just release` runs with `VERSION` at `0.2.0`
-- THEN it fails
+- WHEN the container build publishes an image for `0.2.0`
+- THEN it leaves the tag unchanged
+- AND the build succeeds
+
+#### Scenario: Built image
+- GIVEN the image `0.2.0` exists
+- WHEN a main push runs the container build
+- THEN it builds nothing
+- AND it creates no tag
 
 ### Requirement: Automatic Release
-A push to `main` SHALL release the pushed commit when the tag `vVERSION` does not exist on the remote, and SHALL do nothing when it exists.
+A push to `main` SHALL start the container build and the chart build.
 
-The release SHALL read `VERSION` from the pushed commit and SHALL use the [release command](#requirement-release-command).
+Each build SHALL skip when its registry already holds its version. The container build SHALL compare its app version with the image tags. The chart build SHALL compare the chart `version` with the published chart versions.
 
-#### Scenario: Unreleased version on main
-- GIVEN `VERSION` holds `0.2.0` at the pushed `main` commit
-- AND the tag `v0.2.0` does not exist on the remote
+#### Scenario: New app version on main
+- GIVEN `VERSION` holds `0.2.0`
+- AND no image has the `0.2.0` tag
 - WHEN the push lands
-- THEN the commit is tagged `v0.2.0`
-- AND the build runs on the tag
+- THEN the container build publishes the image
+- AND the container build tags the commit `v0.2.0`
 
-#### Scenario: Released version on main
-- GIVEN `VERSION` holds `0.2.0` at the pushed `main` commit
-- AND the tag `v0.2.0` exists on the remote
+#### Scenario: Published app version on main
+- GIVEN `VERSION` holds `0.2.0`
+- AND an image has the `0.2.0` tag
 - WHEN the push lands
-- THEN no tag is created
-- AND no build runs
+- THEN the container build does nothing
+
+#### Scenario: New chart version on main
+- GIVEN the chart `version` is `0.1.2`
+- AND no chart package has version `0.1.2`
+- WHEN a chart-only push lands
+- THEN the chart build publishes version `0.1.2`
+- AND the container build does nothing when the app version image exists
+
+#### Scenario: Published chart version on main
+- GIVEN the chart `version` is `0.1.2`
+- AND a chart package has version `0.1.2`
+- WHEN the push lands
+- THEN the chart build does nothing
 
 ### Requirement: Binary Version
 The binary SHALL report its app version from `invoicer --version` and exit successfully.
@@ -126,16 +124,10 @@ The image SHALL NOT carry a `latest` tag. A pushed tag SHALL NOT be reused for a
 A published image SHALL carry OCI labels for version, revision, source, and creation time.
 
 #### Scenario: Release build
-- GIVEN a build from tag `v0.2.0`
+- GIVEN a build for app version `0.2.0`
 - WHEN the image is pushed
 - THEN it has the tags `0.2.0` and `sha-abc1234`
 - AND both tags resolve to the same digest
-
-#### Scenario: Commit build
-- GIVEN a build from an untagged commit
-- WHEN the image is pushed
-- THEN it has the `sha-abc1234` tag
-- AND it has no app version tag
 
 #### Scenario: No latest tag
 - GIVEN any image build
@@ -186,12 +178,13 @@ A chart-only change SHALL bump `version` and keep `appVersion`.
 - THEN the next package uses a higher `version`
 
 ### Requirement: Release Artifacts
-One release tag SHALL build the binary, image, and chart from the tagged commit. The binary version, image version tag, and chart `appVersion` SHALL all equal the app version.
+One main commit with `VERSION` SHALL build the binary, image, and chart. The binary version, image version tag, and chart `appVersion` SHALL all equal the app version. The container build SHALL tag the commit `v<app version>`.
 
 #### Scenario: Artifacts agree
-- GIVEN tag `v0.2.0`
-- WHEN the release builds the binary, image, and chart
+- GIVEN `VERSION` holds `0.2.0` at a main commit
+- WHEN the push builds the binary, image, and chart
 - THEN the binary reports `0.2.0`
 - AND the image has the `0.2.0` tag
 - AND the chart `appVersion` is `0.2.0`
-- AND every artifact comes from the tagged commit
+- AND the commit is tagged `v0.2.0`
+- AND every artifact comes from the main commit
